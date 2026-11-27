@@ -352,19 +352,45 @@ class _Link:
                                                    - np.percentile(xyz, 5, axis=0)))
             inliers = np.empty((0, 2))
         else:
-            matches = _describe_matches(self.keys, features, matcher)
+            saved_matches = _describe_matches(self.keys, features, matcher)
+            matches = list(saved_matches)
             if self.last is not None and self.last[0] == idx - 1:
                 flowed = _flow(self.last, gray)
                 if flowed is not None:
                     matches.insert(0, flowed)
             allowed = _hue_region(hsv, self.hue) if self.hue is not None and mask is None else mask
             result = _pose_from_pairs(matches, depth, K, allowed, self.scale)
+            if result is None and self.hue is not None and mask is None:
+                # A newly turned face can have a different colour. Reacquire
+                # from many mutually matched, stored texture descriptors and a
+                # rigid fit before trusting observations away from the paint cue.
+                alternative = _pose_from_pairs(saved_matches, depth, K, None, self.scale)
+                if alternative is not None and len(alternative[1]) >= 18:
+                    prior = [r for r in self.rows[:-1] if r["status"] == "observed"]
+                    space = "part_to_camera" if camera is None else "part_to_world"
+                    last = prior[-1][space][:3, 3]
+                    proposed = alternative[0] if camera is None else camera @ alternative[0]
+                    # A weakly identified face must connect to the existing
+                    # track. A similar texture on a moving occluder can also
+                    # fit a rigid pose but usually jumps to another depth.
+                    per_frame = 0.08 * self.scale
+                    if len(prior) > 1:
+                        shift = np.linalg.norm(last - prior[-2][space][:3, 3])
+                        per_frame = max(per_frame, 2.5 * shift / (prior[-1]["frame"] - prior[-2]["frame"]))
+                    travel = per_frame * (idx - prior[-1]["frame"]) + 0.04 * self.scale
+                    if np.linalg.norm(proposed[:3, 3] - last) <= travel:
+                        result = alternative
             if result is None:
                 return
             pose, inliers = result
             if mask is None:
                 mask = self.projected_mask(rgb, depth, K, pose, inliers)
                 if allowed is not None:
+                    # Allow nearby new texture on a face reached through a
+                    # neighbouring view, even where its paint is different.
+                    radius = min(12, max(4, round(0.04 * np.sqrt(self.initial_area))))
+                    for x, y in np.rint(inliers).astype(int):
+                        cv2.circle(allowed, (x, y), radius, 1, -1)
                     mask &= allowed
             expected_area = self.initial_area * (self.initial_distance / max(pose[2, 3], 1e-6)) ** 2
             if mask.sum() < 0.075 * expected_area:
