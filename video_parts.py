@@ -298,7 +298,23 @@ class _Link:
         expand = max(4, int(0.20 * max(bw, bh)))
         rect = (max(0, x-expand), max(0, y-expand),
                 min(w, x+bw+expand), min(h, y+bh+expand))
-        return _segment(rgb, depth, support, rect)
+        mask = _segment(rgb, depth, support, rect)
+        if not len(points) or not mask.any():
+            return mask
+        # Adjacent links often form a single 2D silhouette. Reject surfaces
+        # separated in 3D from the link, while allowing the model to grow
+        # around an edge as a previously unseen face turns into view.
+        ys, xs = np.nonzero(mask)
+        local = _transform(_xyz(np.column_stack((xs, ys)), depth, K), _inverse(pose))
+        finite = np.isfinite(local).all(axis=1)
+        keep = np.zeros(len(local), bool)
+        if finite.any():
+            index = cv2.flann_Index(points.astype(np.float32), dict(algorithm=1, trees=2))
+            _, distance2 = index.knnSearch(local[finite].astype(np.float32), 1, params=dict(checks=16))
+            radius = max(0.11 * self.scale, 0.025 * self.initial_distance)
+            keep[finite] = distance2[:, 0] < radius * radius
+        mask[ys[~keep], xs[~keep]] = 0
+        return mask
 
     def observe(self, idx, rgb, gray, hsv, depth, K, features, matcher, masks, camera):
         row = {"frame": idx, "status": "unavailable", "part_to_camera": None,

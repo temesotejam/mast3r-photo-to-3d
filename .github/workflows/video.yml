@@ -105,6 +105,14 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Install encoder for the generated browser demo
+        if: env.USE_EXAMPLE == 'true'
+        run: |
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
+
       - name: Reconstruct the generated video through the web API
         if: env.USE_EXAMPLE == 'true'
         shell: bash

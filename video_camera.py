@@ -93,15 +93,32 @@ def _relative_pose(src, dst, depth, calibration, boxes):
         raise _NoBackgroundPose('有効な深度を持つ背景対応点が15点未満です。')
     rays = np.column_stack((src, np.ones(len(src)))) @ np.linalg.inv(calibration).T
     xyz = np.ascontiguousarray(rays * (z / rays[:, 2])[:, None], dtype=np.float64)
-    ok, r, t, inliers = cv2.solvePnPRansac(
-        xyz, dst, calibration, None, iterationsCount=350, reprojectionError=3.0,
-        confidence=0.999, flags=cv2.SOLVEPNP_EPNP)
-    if not ok or inliers is None or len(inliers) < max(12, 0.55 * len(src)):
+    required = max(12, 0.55 * len(src))
+    # Prefer tight agreement on well-conditioned frames. Predicted depths and
+    # ORB localization can be noisier, so allow a wider fit when necessary.
+    for tolerance in (1.25, 3.0):
+        ok, r, t, inliers = cv2.solvePnPRansac(
+            xyz, dst, calibration, None, iterationsCount=350, reprojectionError=tolerance,
+            confidence=0.999, flags=cv2.SOLVEPNP_EPNP)
+        if not ok or inliers is None or len(inliers) < required:
+            continue
+        projection = cv2.projectPoints(xyz, r, t, calibration, None)[0].reshape(-1, 2)
+        errors = np.linalg.norm(projection - dst, axis=1)
+        ids = np.flatnonzero(errors <= tolerance)
+        if len(ids) >= required:
+            break
+    else:
         raise _NoBackgroundPose('背景点の過半数が同一のカメラ運動に一致しません。')
-    ids = inliers.ravel()
     hull = cv2.convexHull(src[ids])
     if cv2.contourArea(hull) < w * h * 0.025:
         raise _NoBackgroundPose('背景の対応点が狭い領域に集中しています。')
+    # Trim the tail after verifying majority support. Occlusion boundaries may
+    # have a neighbouring surface's depth and otherwise bias translation.
+    median = np.median(errors[ids])
+    mad = np.median(np.abs(errors[ids] - median))
+    trimmed = ids[errors[ids] <= max(0.45, median + 2.5 * 1.4826 * mad)]
+    if len(trimmed) >= 12 and cv2.contourArea(cv2.convexHull(src[trimmed])) >= w * h * 0.025:
+        ids = trimmed
     pts, uv = xyz[ids], dst[ids]
     r, t = cv2.solvePnPRefineLM(pts, uv, calibration, None, r, t)
     rotation = cv2.Rodrigues(r)[0]

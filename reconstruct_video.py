@@ -110,7 +110,9 @@ def main():
     else:
         cameras = [np.eye(4) for _ in frames]
     from video_parts import reconstruct_parts
-    reconstructed = reconstruct_parts(frames, z, k, parts, camera_poses=cameras)
+    reconstructed = reconstruct_parts(frames, z, k, parts, camera_poses=cameras, times=times)
+    if all(sum(r["status"] == "observed" for r in p["frames"]) < 2 for p in reconstructed):
+        raise ValueError("動画内で部品を継続して追跡できませんでした。最初のコマで模様のある部品を小さめに囲み直してください。")
     output = {"version": 1, "depth_method": "mast3r-pairwise", "model": MODEL,
               "model_revision": MODEL_REVISION, "camera_mode": args.camera,
               "coordinate_system": "opencv", "units": "model scale", "width": width,
