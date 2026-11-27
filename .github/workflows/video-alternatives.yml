@@ -1,0 +1,117 @@
+name: Compare and publish alternative video methods
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/video-alternatives.yml'
+      - 'video_alt_depth.py'
+      - 'video_monst3r.py'
+      - 'video_rgb_sfm.py'
+      - 'video_methods.py'
+      - 'video_depth.py'
+      - 'reconstruct_video.py'
+      - 'video_parts.py'
+      - 'video_shape.py'
+      - 'video_bundle.py'
+      - 'video_pose_memory.py'
+      - 'video_calibration.py'
+      - 'scripts/setup_video_method.py'
+      - 'scripts/setup_monst3r.py'
+      - 'scripts/requirements-inference.txt'
+      - 'scripts/make_video_example.py'
+      - 'scripts/video_quality.py'
+      - 'scripts/video_surface_quality.py'
+  workflow_dispatch:
+
+permissions: {}
+concurrency:
+  group: video-alternatives-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        method: [rgb-sfm, depth-anything-v2, monst3r]
+    env:
+      METHOD: ${{ matrix.method }}
+      OMP_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '1'
+      PYTHONUNBUFFERED: '1'
+      HF_HUB_DOWNLOAD_TIMEOUT: '180'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python scripts/setup_video_method.py --method "$METHOD"
+      - name: Prepare the annotated example
+        run: |
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
+          python scripts/make_video_example.py --output-dir "$RUNNER_TEMP/clip" --reference-arrays "$RUNNER_TEMP/reference.npz"
+      - name: Reconstruct with the selected backend and score against the annotations
+        shell: bash
+        run: |
+          clip="$RUNNER_TEMP/clip"
+          mkdir -p result
+          python reconstruct_video.py --method "$METHOD" --device cpu --video "$clip/video.mp4" --parts "$clip/parts.json" --output "result/$METHOD.json"
+          python scripts/video_quality.py "$clip/truth.json" "result/$METHOD.json" --reference "$RUNNER_TEMP/reference.npz" --output "result/$METHOD-quality.json"
+          (cd "$clip" && sha256sum video.mp4 parts.json) > "result/$METHOD-input.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: video-${{ matrix.method }}
+          path: result/
+          if-no-files-found: error
+          retention-days: 7
+
+  save:
+    needs: compare
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: video-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/scenes
+      - name: Save results for the matching public video
+        shell: bash
+        run: |
+          bundle="$RUNNER_TEMP/scenes"
+          for method in rgb-sfm depth-anything-v2 monst3r; do
+            (cd docs/video-example && sha256sum --check "$bundle/$method-input.sha256")
+            for name in "$method.json" "$method-quality.json"; do
+              cp "$bundle/$name" "docs/video-example/$name"
+              git add -- "docs/video-example/$name"
+            done
+          done
+          if ! git diff --cached --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'Publish reconstructed RGB video alternatives'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+  publish:
+    needs: save
+    permissions:
+      contents: write
+      pages: write
+    uses: ./.github/workflows/pages.yml

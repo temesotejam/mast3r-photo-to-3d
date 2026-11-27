@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f4f6f2">
-  <title>動画から3D動作を復元 · MASt3R</title>
+  <title>動画から3D動作を復元 · Video to 3D</title>
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./video.css">
 </head>
 <body>
   <header class="topbar">
     <div class="wrap brand-row">
-      <div class="brand"><span class="brand-icon" aria-hidden="true">3D</span><b>MASt3R</b><span class="brand-line"></span><span>Video to 3D</span></div>
+      <div class="brand"><span class="brand-icon" aria-hidden="true">3D</span><b>Video to 3D</b></div>
       <a class="source" href="./">写真から復元</a>
     </div>
   </header>
@@ -21,6 +21,9 @@
       <div class="panel-title">
         <h2 id="scene-title">動作ビュー</h2>
         <div class="toolbar">
+          <select class="subbutton" id="sample-method" aria-label="サンプルの復元方式">
+            <option value="mast3r">MASt3R</option>
+          </select>
           <button class="subbutton" id="sample" type="button">サンプルを開く</button>
           <button class="subbutton" id="open-scene" type="button">JSONを開く</button>
           <input class="sr-file" id="scene-file" type="file" tabindex="-1" accept=".json,application/json">
@@ -54,14 +57,18 @@
     <section class="panel input-panel" aria-labelledby="video-title">
       <div class="panel-title"><h2 id="video-title">自分の動画で復元</h2></div>
       <div class="input-body" id="launch" hidden>
-        <p>復元は自分のCodespaceまたはPCで実行します。Codespacesのポート <code>7861</code> を開き、操作画面で動画モードを選んでください。</p>
-        <div class="launcher"><a class="run launch-link" href="https://codespaces.new/temesotejam/mast3r-photo-to-3d?quickstart=1">GitHubで起動</a>
+        <p>GitHub Actionsでは、復元方式とリポジトリ内の動画を選んで実行できます。Codespacesの場合はポート <code>7861</code> で動画をアップロードできます。</p>
+        <div class="launcher"><a class="run launch-link" href="https://github.com/temesotejam/mast3r-photo-to-3d/actions/workflows/video.yml">GitHub Actionsで実行</a>
+          <a href="https://codespaces.new/temesotejam/mast3r-photo-to-3d?quickstart=1">Codespacesで起動</a>
           <a href="http://127.0.0.1:7861/video.html">ローカルの動画モード</a></div>
       </div>
       <div class="input-body" id="process" hidden>
         <div class="pick-row"><button id="pick-video" type="button" class="subbutton">動画を選ぶ</button><span id="filename">未選択</span></div>
         <input type="file" id="video-file" class="sr-file" tabindex="-1" accept=".mp4,.mov,.webm">
         <p class="hint" id="clip-instructions">30秒以内のMP4・MOV・WebMを選び、最初のフレーム上で別々に動く部品をひとつずつ囲みます。</p>
+        <label class="camera-setting">復元方式
+          <select id="method"><option value="mast3r">MASt3R</option></select>
+        </label>
         <label class="camera-setting">フレームの抽出
           <select id="sampling"><option value="dense">細かく追跡（目標15コマ/秒・最大96コマ）</option><option value="standard">軽量（目標4コマ/秒・最大24コマ）</option></select>
         </label>

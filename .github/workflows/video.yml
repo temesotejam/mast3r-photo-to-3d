@@ -13,6 +13,8 @@ on:
       - 'video_shape.py'
       - 'video_bundle.py'
       - 'video_pose_memory.py'
+      - 'video_methods.py'
+      - 'scripts/setup_video_method.py'
       - 'server.py'
       - 'scripts/verify_video.mjs'
       - 'scripts/video_quality.py'
@@ -30,6 +32,11 @@ on:
         type: string
         default: videos/parts.json
         required: true
+      method:
+        description: Reconstruction method
+        type: choice
+        options: [mast3r, depth-anything-v2, rgb-sfm, monst3r]
+        default: mast3r
       camera:
         description: Camera motion in the input video
         type: choice
@@ -64,6 +71,7 @@ jobs:
     timeout-minutes: 120
     env:
       USE_EXAMPLE: ${{ github.event_name == 'push' || inputs.use_example }}
+      VIDEO_METHOD: ${{ inputs.method || 'mast3r' }}
       HF_HUB_DOWNLOAD_TIMEOUT: '180'
       PYTHONUNBUFFERED: '1'
     steps:
@@ -101,8 +109,9 @@ jobs:
           cache-dependency-path: |
             scripts/requirements-inference.txt
             scripts/setup_cpu.py
+            scripts/setup_video_method.py
 
-      - run: python scripts/setup_cpu.py
+      - run: python scripts/setup_video_method.py --method "$VIDEO_METHOD"
 
       - name: Reconstruct selected video
         if: env.USE_EXAMPLE != 'true'
@@ -114,13 +123,13 @@ jobs:
         run: |
           mkdir -p result
           inputs="$RUNNER_TEMP/video-input"
-          options=(--camera "$CAMERA" --sampling "${SAMPLING:-standard}")
+          options=(--method "$VIDEO_METHOD" --camera "$CAMERA" --sampling "${SAMPLING:-standard}")
           if [[ -n "$HFOV" ]]; then options+=(--horizontal-fov-deg "$HFOV"); fi
           python reconstruct_video.py --video "$inputs"/video.* --parts "$inputs/parts.json" "${options[@]}" --output result/scene.json
           test -s result/scene.json
 
       - uses: actions/setup-node@v4
-        if: env.USE_EXAMPLE == 'true'
+        if: env.USE_EXAMPLE == 'true' && env.VIDEO_METHOD == 'mast3r'
         with:
           node-version: '22'
 
@@ -132,13 +141,18 @@ jobs:
             sudo apt-get install -y --no-install-recommends ffmpeg
           fi
 
-      - name: Reconstruct the generated video through the web API
+      - name: Generate a repeatable video and its evaluation reference
         if: env.USE_EXAMPLE == 'true'
-        shell: bash
         run: |
           example="$RUNNER_TEMP/generated-video"
           python scripts/make_video_example.py --output-dir "$example" --reference-arrays "$example/reference.npz"
           mkdir -p result
+
+      - name: Reconstruct the generated video through the web API
+        if: env.USE_EXAMPLE == 'true' && env.VIDEO_METHOD == 'mast3r'
+        shell: bash
+        run: |
+          example="$RUNNER_TEMP/generated-video"
           python -u server.py > "$RUNNER_TEMP/video-server.log" 2>&1 &
           server=$!
           trap 'kill "$server" 2>/dev/null || true' EXIT
@@ -149,9 +163,22 @@ jobs:
           fi
           VIDEO_SURFACE_REFERENCE="$example/reference.npz" VIDEO_QUALITY_REPORT=result/quality.json node scripts/verify_video.mjs "$example" result/scene.json
 
+      - name: Reconstruct and evaluate the generated video with the selected alternative
+        if: env.USE_EXAMPLE == 'true' && env.VIDEO_METHOD != 'mast3r'
+        shell: bash
+        run: |
+          example="$RUNNER_TEMP/generated-video"
+          python reconstruct_video.py --video "$example/video.mp4" --parts "$example/parts.json" --method "$VIDEO_METHOD" --camera fixed --output result/scene.json
+          compare=()
+          published=docs/video-example
+          if cmp -s "$example/video.mp4" "$published/video.mp4" && cmp -s "$example/parts.json" "$published/parts.json"; then
+            compare=(--baseline "$published/scene.json")
+          fi
+          python scripts/video_quality.py "$example/truth.json" result/scene.json "${compare[@]}" --reference "$example/reference.npz" --output result/quality.json
+
       - uses: actions/upload-artifact@v4
         with:
-          name: mast3r-video-scene
+          name: ${{ env.VIDEO_METHOD }}-video-scene
           path: |
             result/scene.json
             result/quality.json

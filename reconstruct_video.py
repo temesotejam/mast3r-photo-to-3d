@@ -8,8 +8,7 @@ import tempfile
 import cv2
 import numpy as np
 
-from reconstruct import MODEL, MODEL_REVISION
-from video_depth import estimate_depths
+from video_methods import METHODS
 
 
 SAMPLING = {"standard": (4, 24), "dense": (15, 96)}
@@ -95,11 +94,70 @@ def serialize_parts(parts):
     return result
 
 
+def estimate_depths(*args, **kwargs):
+    """Default inference entry point retained for scripts replaying frozen MASt3R maps."""
+    from video_depth import estimate_depths as predict
+    return predict(*args, **kwargs)
+
+
+def reconstruct_motion(frames, times, parts, args):
+    width, height = frames[0].shape[1], frames[0].shape[0]
+    boxes = [p["box"] for p in parts]
+    method = args.method
+    z = None
+    if method == "rgb-sfm":
+        from video_rgb_sfm import reconstruct_rgb_parts
+        geometry, model, revision = "sparse-rgb-sfm", None, None
+        k = None
+    elif method == "mast3r":
+        from reconstruct import MODEL, MODEL_REVISION
+        geometry, model, revision = "mast3r-pairwise", MODEL, MODEL_REVISION
+        z, k = estimate_depths(frames, boxes, args.camera, args.device)
+    else:
+        if method == "monst3r":
+            import video_monst3r as backend
+            geometry = "monst3r-pairwise"
+        else:
+            import video_alt_depth as backend
+            geometry = "depth-anything-v2-metric-indoor"
+        model, revision = backend.MODEL, backend.MODEL_REVISION
+        z, k = backend.estimate_depths(frames, boxes, args.camera, args.device)
+
+    source = {"mast3r": "mast3r", "monst3r": "monst3r"}.get(method, "assumed_60deg")
+    if args.horizontal_fov_deg is not None:
+        focal = width / (2 * np.tan(np.deg2rad(args.horizontal_fov_deg / 2)))
+        source = "horizontal_fov"
+    else:
+        from video_calibration import estimate_planar_focal
+        focal = estimate_planar_focal(frames, boxes)
+        if focal is not None:
+            source = "rigid_plane_tracks"
+    if k is None and focal is None:
+        focal = width / (2 * np.tan(np.deg2rad(30)))
+    if focal is not None:
+        k = np.array([[focal, 0, (width - 1) / 2], [0, focal, (height - 1) / 2], [0, 0, 1]])
+    if args.camera == "moving":
+        from video_camera import estimate_camera_poses
+        cameras = estimate_camera_poses(frames, z, k, parts)
+    else:
+        cameras = [np.eye(4) for _ in frames]
+    if method == "rgb-sfm":
+        reconstructed = reconstruct_rgb_parts(frames, k, parts, times=times)
+    else:
+        from video_parts import reconstruct_parts
+        reconstructed = reconstruct_parts(frames, z, k, parts, camera_poses=cameras, times=times,
+                                          allow_focal_refit=source not in ("horizontal_fov", "rigid_plane_tracks"))
+    return reconstructed, cameras, k, {"method": method, "depth_method": geometry,
+                                        "model": model, "model_revision": revision,
+                                        "intrinsics_source": source}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--video", type=Path, required=True)
     parser.add_argument("--parts", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--method", choices=METHODS, default="mast3r")
     parser.add_argument("--camera", choices=("fixed", "moving"), default="fixed")
     parser.add_argument("--device", choices=("cpu", "cuda", "auto"), default="auto")
     parser.add_argument("--sampling", choices=SAMPLING, default="standard",
@@ -109,40 +167,19 @@ def main():
     args = parser.parse_args()
     if args.horizontal_fov_deg is not None and not 10 <= args.horizontal_fov_deg <= 160:
         parser.error("--horizontal-fov-deg must be between 10 and 160")
+    if args.method == "rgb-sfm" and args.camera != "fixed":
+        parser.error("RGB-SfM requires a fixed camera to separate camera and part motion.")
     frames, times = load_clip(args.video, *SAMPLING[args.sampling])
     sample_rate = (len(frames) - 1) / float(times[-1])
     print(f"Processing {len(frames)} frames at {sample_rate:.2f} Hz on average.", flush=True)
     height, width = frames[0].shape[:2]
     parts = load_parts(args.parts, width, height)
-    z, k = estimate_depths(frames, [p["box"] for p in parts], args.camera, args.device)
-    focal = None
-    intrinsics_source = "mast3r"
-    if args.horizontal_fov_deg is not None:
-        focal = width / (2 * np.tan(np.deg2rad(args.horizontal_fov_deg / 2)))
-        intrinsics_source = "horizontal_fov"
-    else:
-        from video_calibration import estimate_planar_focal
-        focal = estimate_planar_focal(frames, [p["box"] for p in parts])
-        if focal is not None:
-            intrinsics_source = "rigid_plane_tracks"
-    if focal is not None:
-        # Square pixels and principal point at the center of the tracked frame.
-        k = np.array([[focal, 0, (width - 1) / 2], [0, focal, (height - 1) / 2], [0, 0, 1]])
-    if args.camera == "moving":
-        from video_camera import estimate_camera_poses
-        cameras = estimate_camera_poses(frames, z, k, parts)
-    else:
-        cameras = [np.eye(4) for _ in frames]
-    from video_parts import reconstruct_parts
-    reconstructed = reconstruct_parts(frames, z, k, parts, camera_poses=cameras, times=times,
-                                      allow_focal_refit=(intrinsics_source == "mast3r"))
+    reconstructed, cameras, k, metadata = reconstruct_motion(frames, times, parts, args)
     if all(sum(r["status"] == "observed" for r in p["frames"]) < 2 for p in reconstructed):
         raise ValueError("動画内で部品を継続して追跡できませんでした。最初のコマで模様のある部品を小さめに囲み直してください。")
-    output = {"version": 1, "depth_method": "mast3r-pairwise", "model": MODEL,
-              "model_revision": MODEL_REVISION, "camera_mode": args.camera,
-              "coordinate_system": "opencv", "units": "model scale", "width": width,
+    output = {"version": 1, **metadata, "camera_mode": args.camera,
+              "coordinate_system": "opencv", "units": "independent part scales" if args.method == "rgb-sfm" else "model scale", "width": width,
               "height": height, "intrinsics": k.ravel().tolist(), "frame_count": len(frames),
-              "intrinsics_source": intrinsics_source,
               "horizontal_fov_deg": float(np.rad2deg(2 * np.arctan(width / (2 * k[0, 0])))),
               "sampling": args.sampling, "fps": sample_rate, "times": times.round(5).tolist(),
               "camera_to_world": [np.round(np.asarray(p)[:3].ravel(), 7).tolist() for p in cameras],

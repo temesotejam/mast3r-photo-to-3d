@@ -1,12 +1,10 @@
-"""Estimate target-camera depths from several MASt3R pairs per video frame."""
+"""Combine target-camera pointmaps from several support frames per video frame."""
 import os
 import sys
 from pathlib import Path
 
 import cv2
 import numpy as np
-
-from reconstruct import MODEL, MODEL_REVISION
 
 
 def _estimate_focal(xyz, confidence, xs, ys):
@@ -90,11 +88,18 @@ def _guided_resize(z, coarse_rgb, frame):
 
 def estimate_depths(frames, boxes, camera_mode, device="auto"):
     """Return axial depth maps in input pixel order and their shared camera matrix."""
-    import torch
-
     vendor = Path(os.environ.get("MAST3R_DIR") or Path(__file__).resolve().parent / "vendor/mast3r")
     sys.path.insert(0, str(vendor.resolve()))
     from mast3r.model import AsymmetricMASt3R
+    from reconstruct import MODEL, MODEL_REVISION
+
+    model = AsymmetricMASt3R.from_pretrained(MODEL, revision=MODEL_REVISION)
+    return estimate_pairwise_depths(frames, boxes, camera_mode, device, model)
+
+
+def estimate_pairwise_depths(frames, boxes, camera_mode, device, model):
+    """Fuse target-camera pointmaps from a DUSt3R-family model with a shared image encoder."""
+    import torch
 
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -108,7 +113,7 @@ def estimate_depths(frames, boxes, camera_mode, device="auto"):
     nw, nh = (max(16, round(v * factor / 16) * 16) for v in (width, height))
     xs = (np.arange(nw, dtype=np.float32) - (nw - 1) / 2)[None, :]
     ys = (np.arange(nh, dtype=np.float32) - (nh - 1) / 2)[:, None]
-    model = AsymmetricMASt3R.from_pretrained(MODEL, revision=MODEL_REVISION).to(device).eval()
+    model = model.to(device).eval()
     small = [cv2.resize(frame, (nw, nh), interpolation=cv2.INTER_AREA) for frame in frames]
     shape = torch.tensor([[nh, nw]], dtype=torch.int32, device=device)
     background = np.ones((height, width), dtype=bool)

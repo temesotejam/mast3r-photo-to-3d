@@ -19,6 +19,8 @@ from urllib.parse import urlsplit
 
 from PIL import Image
 
+from video_methods import METHODS
+
 
 ROOT = Path(__file__).resolve().parent
 PAGES_ORIGIN = "https://temesotejam.github.io"
@@ -43,14 +45,25 @@ def runtime_status():
     return True, "MASt3Rを利用できます。初回実行時はモデルを取得します。"
 
 
-def video_runtime_status():
-    ready, message = runtime_status()
-    if not ready:
-        return False, message
-    missing = [name for name in ("cv2", "numpy") if importlib.util.find_spec(name) is None]
-    if missing or not (ROOT / "reconstruct_video.py").is_file():
-        return False, "動画復元の実行環境をセットアップしてください（README参照）。"
-    return True, "動画復元を利用できます。"
+def video_methods_available():
+    def installed(*names):
+        return all(importlib.util.find_spec(name) is not None for name in names)
+
+    base = installed("cv2", "numpy", "scipy") and (ROOT / "reconstruct_video.py").is_file()
+    vendor = Path(os.environ.get("MONST3R_DIR") or ROOT / "vendor/monst3r")
+    monst3r = all((vendor / p).is_file() for p in ("dust3r/model.py", "croco/models/croco.py"))
+    return {
+        "mast3r": base and runtime_status()[0],
+        "rgb-sfm": base and (ROOT / "video_rgb_sfm.py").is_file(),
+        "depth-anything-v2": base and installed("torch", "torchvision", "transformers", "safetensors"),
+        "monst3r": base and monst3r and installed("torch", "torchvision", "evo", "safetensors"),
+    }
+
+
+def video_runtime_status(methods):
+    if any(methods.values()):
+        return True, "動画復元を利用できます。"
+    return False, "動画復元の実行環境をセットアップしてください（README参照）。"
 
 
 def multipart_fields(stream, length, content_type):
@@ -102,11 +115,17 @@ def read_photos(photos, destination):
 def read_video(fields, destination):
     parts = dict(fields)
     if (len(parts) != len(fields) or not {"parts", "video"} <= parts.keys() or
-            parts.keys() - {"parts", "video", "camera", "sampling", "horizontal_fov_deg"}):
+            parts.keys() - {"parts", "video", "camera", "sampling", "horizontal_fov_deg", "method"}):
         raise ValueError("動画と部品の選択範囲を送信してください。")
     camera = parts["camera"].get_payload(decode=True) if "camera" in parts else b"fixed"
     if camera not in (b"fixed", b"moving"):
         raise ValueError("カメラ設定は fixed または moving を選んでください。")
+    raw_method = parts["method"].get_payload(decode=True) if "method" in parts else b"mast3r"
+    if raw_method not in [value.encode("ascii") for value in METHODS]:
+        raise ValueError("復元方法を選び直してください。")
+    method = raw_method.decode("ascii")
+    if method == "rgb-sfm" and camera != b"fixed":
+        raise ValueError("RGB-SfMは固定カメラで撮影した動画を指定してください。")
     sampling = parts["sampling"].get_payload(decode=True) if "sampling" in parts else b"standard"
     if sampling not in (b"standard", b"dense"):
         raise ValueError("フレームの抽出設定は standard または dense を選んでください。")
@@ -156,7 +175,7 @@ def read_video(fields, destination):
     path = destination / ("input" + extension)
     path.write_bytes(video)
     (destination / "parts.json").write_text(json.dumps(boxes, ensure_ascii=False), encoding="utf-8")
-    return path, camera.decode("ascii"), sampling.decode("ascii"), fov
+    return path, camera.decode("ascii"), sampling.decode("ascii"), fov, method
 
 
 def vertex_count(path):
@@ -208,10 +227,10 @@ class JobStore:
                                "--output", str(output), "--device", "auto"]
                     progress = "MASt3Rで写真を復元しています。"
                 else:
-                    video_path, camera, sampling, fov = video
+                    video_path, camera, sampling, fov, method = video
                     command = [sys.executable, str(ROOT / "reconstruct_video.py"), "--video", str(video_path),
                                "--parts", str(inputs / "parts.json"), "--output", str(output), "--camera", camera,
-                               "--sampling", sampling]
+                               "--sampling", sampling, "--method", method]
                     if fov is not None:
                         command.extend(["--horizontal-fov-deg", str(fov)])
                     progress = "動画のフレームを復元し、部品ごとの動きを計算しています。"
@@ -319,9 +338,10 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if path == "/api/health":
             ready, message = runtime_status()
-            video_ready, video_message = video_runtime_status()
+            video_methods = video_methods_available()
+            video_ready, video_message = video_runtime_status(video_methods)
             self.send_json(200, {"engine": "mast3r", "ready": ready, "message": message,
-                                 "video_ready": video_ready, "video_message": video_message})
+                                 "video_ready": video_ready, "video_message": video_message, "video_methods": video_methods})
             return
         match = JOB_ROUTE.fullmatch(path)
         store = self.server.jobs
@@ -359,7 +379,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_json(404, {"message": "URLを確認してください。"})
             return
         kind = path.rsplit("/", 1)[1]
-        ready, message = video_runtime_status() if kind == "video-jobs" else runtime_status()
+        video_methods = video_methods_available() if kind == "video-jobs" else {}
+        ready, message = video_runtime_status(video_methods) if kind == "video-jobs" else runtime_status()
         if not ready:
             self.send_json(503, {"message": message})
             return
@@ -385,6 +406,8 @@ class Handler(SimpleHTTPRequestHandler):
                 read_photos(fields, inputs)
             else:
                 video = read_video(fields, inputs)
+                if not video_methods[video[-1]]:
+                    raise ValueError(f"選択した方式 {video[-1]} は未セットアップです。READMEの手順を確認してください。")
             store.start(job_id, kind, video)
         except (OSError, ValueError, RuntimeError) as error:
             shutil.rmtree(job_dir, ignore_errors=True)

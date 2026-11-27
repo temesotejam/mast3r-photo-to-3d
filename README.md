@@ -43,6 +43,19 @@ GitHub Actionsから自分の素材を処理するには、動画と囲みJSON�
 .venv/bin/python reconstruct_video.py --video input.mp4 --parts parts.json --camera fixed --sampling dense --output results/scene.json
 ```
 
+## MASt3R以外で動画を復元する
+
+[同じ動画の3D点群を方式ごとに再生](https://temesotejam.github.io/mast3r-photo-to-3d/video.html?sample=rgb-sfm) · [実写と合成動画での比較、適した用途](VIDEO_METHODS.md)
+
+動画の復元画面とGitHub Actionsに方式を選ぶ欄があります。固定カメラで部品の回転を追う **RGB-SfM** は学習済みモデルを使いません。**Depth Anything V2** は室内用モデルで各コマの奥行きを推定し、**MonST3R** は動く物体に対応したモデルで複数のコマから奥行きを推定します。この2方式は推定後に部品ごとの色付き点群と姿勢を求めます。写真の復元には従来どおりMASt3Rを使用します。
+
+ローカルでは復元したい方式だけをインストールできます。Python 3.11で仮想環境を作った後、次の例を実行してください。 `rgb-sfm` の部分を `depth-anything-v2` または `monst3r` に置き換えると、同じ動画を別方式で復元できます。
+
+```sh
+python scripts/setup_video_method.py --method rgb-sfm
+python reconstruct_video.py --method rgb-sfm --video input.mp4 --parts parts.json --camera fixed --output scene.json
+```
+
 ## 自分の写真を使う
 
 1. 上の「Codespacesで復元する」を開き、GitHubにサインインして、このリポジトリのCodespaceを作成または再開します。
