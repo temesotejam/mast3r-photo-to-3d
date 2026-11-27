@@ -8,4 +8,5 @@ https://creativecommons.org/licenses/by-sa/4.0/
 動画は上記の公開データから12コマを取り出し、毎秒4コマの400×300の動画に縮小・再エンコードしたものです。
 点群と時刻ごとの姿勢は今回のアプリで元の大きさの素材を読み込んで推定しました。
 rgb-sfm.json はRGBの特徴点を用いて推定しています。
+depth-anything-v2.json、monst3r.json、mast3r.json は同じRGB動画からそれぞれのモデルで奥行きを推定し、部品の点群と姿勢を求めたものです。
 reference-rgbd.json は先頭コマに限り、実測奥行き・対象マスク・カメラ内部行列を加えています。
