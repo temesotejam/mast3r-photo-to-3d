@@ -143,7 +143,14 @@ async function loadScene(blob, clip, title, generation) {
   get('timeline').disabled = times.length < 2;
   get('timeline').max = times.length - 1;
   tick(0);
-  tell('scene-msg', title);
+  const averageRate = times.length > 1 ? (times.length - 1) / (times.at(-1) - times[0]) : null;
+  const details = [title];
+  if (averageRate) details.push('平均 ' + averageRate.toFixed(1) + ' コマ/秒');
+  const focalLabels = {horizontal_fov: '指定値', rigid_plane_tracks: '部品の動きから推定', mast3r: 'MASt3R推定'};
+  if (Number.isFinite(scene.horizontal_fov_deg) && Object.hasOwn(focalLabels, scene.intrinsics_source)) {
+    details.push('水平画角 ' + scene.horizontal_fov_deg.toFixed(1) + '°（' + focalLabels[scene.intrinsics_source] + '）');
+  }
+  tell('scene-msg', details.join(' · '));
 }
 
 async function sample() {
@@ -189,7 +196,8 @@ function sync() {
   const useWhole = get('whole').checked;
   get('run-video').disabled = busy || !videoFile || get('editor').hidden || (!boxes.length && !useWhole) ||
     (get('camera').value === 'moving' && useWhole);
-  get('pick-video').disabled = get('whole').disabled = get('camera').disabled = busy;
+  get('pick-video').disabled = get('sampling').disabled = get('camera').disabled = busy;
+  get('hfov').disabled = busy;
   get('whole').disabled = busy || get('camera').value === 'moving';
   get('pick-video').textContent = videoFile ? '動画を変更' : '動画を選ぶ';
   get('run-video').textContent = busy ? '処理中…' : '3D動作を復元';
@@ -377,6 +385,7 @@ async function poll() {
 
 async function run(resume = false) {
   if (pages || busy || (!resume && get('run-video').disabled)) return;
+  if (!resume && !get('hfov').reportValidity()) return;
   busy = true; sync(); get('retry-job').hidden = true;
   try {
     if (!resume) {
@@ -390,6 +399,8 @@ async function run(resume = false) {
       data.append('video', videoFile, videoFile.name);
       data.append('parts', JSON.stringify(parts));
       data.append('camera', get('camera').value);
+      data.append('sampling', get('sampling').value);
+      if (get('hfov').value) data.append('horizontal_fov_deg', get('hfov').value);
       tell('job-msg', '動画を送信しています…');
       const job = await (await api('/api/video-jobs', {method:'POST',body:data}, 180000)).json();
       if (typeof job.id !== 'string' || !job.id) throw new JobError('ジョブIDを読み取れませんでした。');

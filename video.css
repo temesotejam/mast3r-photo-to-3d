@@ -46,7 +46,8 @@
 .whole {font-size:.86rem;}
 .whole input {accent-color:var(--green);}
 .camera-setting {display:flex; align-items:center; flex-wrap:wrap; gap:.5rem; font-size:.88rem;}
-.camera-setting select {font:inherit; padding:.35rem .5rem; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:.4rem;}
+.camera-setting select, .camera-setting input {font:inherit; padding:.35rem .5rem; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:.4rem;}
+.camera-setting input {width:7rem;}
 .input-body > .subbutton {justify-self:start;}
 @media (max-width:700px) {
   .comparison {grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);}
