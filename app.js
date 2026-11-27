@@ -159,7 +159,7 @@ function setDownload(blob, filename) {
   el('save').hidden = false;
 }
 
-async function displayCloud(blob, filename, fromBackend = false) {
+async function displayCloud(blob, filename, fromBackend = false, isExample = false) {
   viewing = true;
   syncButtons();
   message('view-message', '');
@@ -169,7 +169,8 @@ async function displayCloud(blob, filename, fromBackend = false) {
     const { count } = await viewer.show(blob);
     if (!fromBackend) setDownload(blob, filename);
     el('point-count').textContent = count.toLocaleString('ja-JP') + ' 点';
-    el('cloud-name').textContent = filename;
+    el('cloud-name').textContent = isExample ? 'ETH3D courtyard · 写真4枚' : filename;
+    el('sample-credit').hidden = !isExample;
     el('cloud-name').hidden = false;
     el('empty').hidden = true;
     el('fit').hidden = false;
@@ -196,10 +197,11 @@ if (el('sample').dataset.path) {
     try {
       const response = await fetch(el('sample').dataset.path);
       if (!response.ok) throw new Error();
-      await displayCloud(await response.blob(), 'sample.ply');
+      await displayCloud(await response.blob(), 'courtyard-4-photos.ply', true, true);
     } catch { message('view-message', 'サンプル点群を読み込めませんでした。'); }
     finally { syncButtons(); }
   });
+  if (new URLSearchParams(location.search).get('sample') === '1') el('sample').click();
 }
 
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));

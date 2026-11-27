@@ -76,12 +76,13 @@
         <div class="view" id="view">
           <div class="plane" aria-hidden="true"></div>
           <canvas id="cloud" tabindex="0" aria-label="3D点群。ドラッグで回転、ホイールで拡大・縮小"></canvas>
-          <div class="empty" id="empty"><span class="reticle" aria-hidden="true"><i></i></span><span id="empty-text">点群の入力待ち</span><button id="sample" type="button" data-path="" hidden>サンプル点群を開く</button></div>
+          <div class="empty" id="empty"><span class="reticle" aria-hidden="true"><i></i></span><span id="empty-text">点群の入力待ち</span><button id="sample" type="button" data-path="./sample.ply" hidden>写真4枚の復元例を開く</button></div>
           <span class="view-label" id="cloud-name" hidden></span>
           <button class="fit" type="button" id="fit" title="点群全体を表示" aria-label="点群全体を表示" hidden><svg><use href="#i-fit"/></svg></button>
         </div>
         <div class="foot"><span id="point-count">0 点</span><span>ドラッグで回転 · スクロールでズーム</span></div>
         <p class="view-message" id="view-message" role="status" hidden></p>
+        <p class="view-message" id="sample-credit" hidden>撮影対象はETH3Dの中庭です。<a href="https://github.com/temesotejam/mast3r-photo-to-3d/tree/main/docs/examples/courtyard">入力写真4枚・出典</a></p>
       </section>
     </div>
   </main>
