@@ -5,6 +5,14 @@ const source = get('source');
 const pages = location.protocol === 'file:' || location.hostname.endsWith('.github.io');
 const viewer = new MotionViewer(get('motion'));
 const statusLabels = { observed: '観測', interpolated: '補間', unavailable: '追跡不可' };
+const methodNames = {
+  mast3r: 'MASt3R', 'depth-anything-v2': 'Depth Anything V2', monst3r: 'MonST3R',
+  'rgb-sfm': 'RGB SfM（特徴点）',
+};
+const sampleFiles = {
+  mast3r: 'scene.json', 'depth-anything-v2': 'depth-anything-v2.json',
+  monst3r: 'monst3r.json', 'rgb-sfm': 'rgb-sfm.json',
+};
 let activeScene = null;
 let times = [];
 let currentFrame = -1;
@@ -145,8 +153,13 @@ async function loadScene(blob, clip, title, generation) {
   tick(0);
   const averageRate = times.length > 1 ? (times.length - 1) / (times.at(-1) - times[0]) : null;
   const details = [title];
+  const method = scene.method || (scene.depth_method === 'mast3r-pairwise' ? 'mast3r' : null);
+  if (method === 'reference-rgbd-pnp') details.push('参照RGB-D ＋ PnP');
+  else if (Object.hasOwn(methodNames, method)) details.push(methodNames[method]);
+  else if (typeof scene.model === 'string' && scene.model) details.push(scene.model);
   if (averageRate) details.push('平均 ' + averageRate.toFixed(1) + ' コマ/秒');
-  const focalLabels = {horizontal_fov: '指定値', rigid_plane_tracks: '部品の動きから推定', mast3r: 'MASt3R推定'};
+  const focalLabels = {horizontal_fov: '指定値', rigid_plane_tracks: '部品の動きから推定', mast3r: 'MASt3R推定',
+    monst3r: 'MonST3R推定', reference_calibration: '参照カメラの校正値', assumed_60deg: '仮定値'};
   if (Number.isFinite(scene.horizontal_fov_deg) && Object.hasOwn(focalLabels, scene.intrinsics_source)) {
     details.push('水平画角 ' + scene.horizontal_fov_deg.toFixed(1) + '°（' + focalLabels[scene.intrinsics_source] + '）');
   }
@@ -155,9 +168,10 @@ async function loadScene(blob, clip, title, generation) {
 
 async function sample() {
   const generation = ++sceneGeneration;
+  const method = get('sample-method').value;
   tell('scene-msg', 'サンプルを読み込んでいます…');
   try {
-    const response = await fetch('./video-example/scene.json');
+    const response = await fetch('./video-example/' + sampleFiles[method]);
     if (!response.ok) throw new Error();
     await loadScene(await response.blob(), './video-example/video.mp4', 'サンプルの復元結果', generation);
     if (generation === sceneGeneration && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -169,6 +183,12 @@ async function sample() {
 }
 
 get('sample').addEventListener('click', sample);
+get('sample-method').addEventListener('change', () => {
+  const url = new URL(location.href);
+  url.searchParams.set('sample', get('sample-method').value);
+  history.replaceState(null, '', url);
+  sample();
+});
 get('open-scene').addEventListener('click', () => get('scene-file').click());
 get('scene-file').addEventListener('change', async e => {
   const file = e.target.files[0]; e.target.value = '';
@@ -194,9 +214,13 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function sync() {
   const useWhole = get('whole').checked;
+  const fixedOnly = get('method').value === 'rgb-sfm';
+  if (fixedOnly) get('camera').value = 'fixed';
+  get('camera-note').hidden = get('camera').value !== 'moving';
+  get('camera').querySelector('[value="moving"]').disabled = fixedOnly;
   get('run-video').disabled = busy || !videoFile || get('editor').hidden || (!boxes.length && !useWhole) ||
     (get('camera').value === 'moving' && useWhole);
-  get('pick-video').disabled = get('sampling').disabled = get('camera').disabled = busy;
+  get('pick-video').disabled = get('sampling').disabled = get('camera').disabled = get('method').disabled = busy;
   get('hfov').disabled = busy;
   get('whole').disabled = busy || get('camera').value === 'moving';
   get('pick-video').textContent = videoFile ? '動画を変更' : '動画を選ぶ';
@@ -273,9 +297,9 @@ canvas.addEventListener('pointerup', e => {
 });
 canvas.addEventListener('pointercancel', () => { drag = null; drawReference(); });
 get('whole').addEventListener('change', renderBoxes);
+get('method').addEventListener('change', sync);
 get('camera').addEventListener('change', () => {
   const moving = get('camera').value === 'moving';
-  get('camera-note').hidden = !moving;
   if (moving) get('whole').checked = false;
   renderBoxes();
 });
@@ -395,7 +419,12 @@ async function run(resume = false) {
       tell('job-msg', '復元環境を確認しています…');
       const health = await (await api('/api/health')).json();
       if (health.video_ready === false) throw new JobError(health.video_message || '動画の復元環境が準備できていません。', 503);
+      const method = get('method').value;
+      if (health.video_methods && !health.video_methods[method]) {
+        throw new JobError('選んだ復元方式をサーバーにセットアップしてください。', 503);
+      }
       const data = new FormData();
+      if (health.video_methods) data.append('method', method);
       data.append('video', videoFile, videoFile.name);
       data.append('parts', JSON.stringify(parts));
       data.append('camera', get('camera').value);
@@ -422,11 +451,24 @@ get('retry-job').addEventListener('click', () => run(true));
 get('launch').hidden = !pages;
 get('process').hidden = pages;
 if (!pages) {
+  api('/api/health').then(response => response.json()).then(health => {
+    if (!health.video_methods) return;
+    const choices = Object.keys(methodNames).filter(method => health.video_methods[method]);
+    if (choices.length) {
+      get('method').replaceChildren(...choices.map(key => new Option(methodNames[key], key)));
+      sync();
+    }
+  }).catch(() => {}); // A job submission retries the health check and displays its error.
   try { jobId = sessionStorage.getItem(persistKey); } catch { /* Optional persistence. */ }
   if (jobId && /^[\w-]{1,128}$/.test(jobId)) {
     get('retry-job').hidden = false;
     tell('job-msg','前回の復元ジョブの状態を確認できます。');
   }
 }
+for (const key of Object.keys(sampleFiles)) {
+  if (key !== 'mast3r') get('sample-method').add(new Option(methodNames[key], key));
+}
+const requestedSample = new URLSearchParams(location.search).get('sample');
+if (Object.hasOwn(sampleFiles, requestedSample)) get('sample-method').value = requestedSample;
 sync();
 sample();
