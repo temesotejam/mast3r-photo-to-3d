@@ -174,7 +174,7 @@ def _rigid(source, target):
     return pose
 
 
-def _pose_from_pairs(matches, depth, K, mask, scale):
+def _pose_from_pairs(matches, depth, K, mask, scale, tracked_area=None, descriptor_matches=()):
     if not matches:
         return None
     # A corner can be found by several keyframes and optical flow. Give its
@@ -203,12 +203,40 @@ def _pose_from_pairs(matches, depth, K, mask, scale):
     pose[:3, 3] = shift.ravel()
     predicted = _transform(local[indices], pose)
     # Reject pixels belonging to a different surface in front of the part.
-    agree = (np.isfinite(observed).all(axis=1) & np.isfinite(predicted).all(axis=1)
-             & (predicted[:, 2] > 0)
-             & (np.abs(observed[:, 2] - predicted[:, 2])
-                < np.maximum(0.24 * scale, 0.09 * np.abs(predicted[:, 2]))))
-    if np.count_nonzero(agree) < max(6, int(0.55 * len(indices))):
-        return None
+    valid = (np.isfinite(observed).all(axis=1) & np.isfinite(predicted).all(axis=1)
+             & (observed[:, 2] > 0) & (predicted[:, 2] > 0))
+    tolerance = np.maximum(0.24 * scale, 0.09 * np.abs(predicted[:, 2]))
+    required = max(6, int(0.55 * len(indices)))
+    agree = valid & (np.abs(observed[:, 2] - predicted[:, 2]) < tolerance)
+    depth_factor = 1.
+    if agree.sum() < required:
+        # Learned monocular depths can drift on the moving foreground even
+        # when fixed background depths agree. Recover only on a continuous,
+        # spatially distributed RGB track with independent descriptor matches.
+        if (tracked_area is None or valid.sum() < 20 or len(indices) < .7 * len(local)
+                or cv2.contourArea(cv2.convexHull(uv[indices])) < .25 * tracked_area):
+            return None
+        # Confirm the same rigid transform with reciprocal descriptor matches;
+        # many keyframes can repeat a single corner, so count distinct pixels.
+        ref = np.concatenate([pair[0] for pair in descriptor_matches])
+        uv_ref = np.concatenate([pair[1] for pair in descriptor_matches])
+        check = _transform(ref, pose) @ K.T
+        positive = check[:, 2] > 1e-6
+        errors = np.linalg.norm(check[:, :2] / np.maximum(check[:, 2:], 1e-6) - uv_ref, axis=1)
+        verified = np.unique(np.rint(uv_ref[positive & (errors < 3)] / 2), axis=0)
+        if len(verified) < 8 or cv2.contourArea(cv2.convexHull(verified.astype(np.float32))) * 4 < .08 * tracked_area:
+            return None
+        reprojection = predicted[valid] @ K.T
+        pixel_error = np.linalg.norm(reprojection[:, :2] / reprojection[:, 2:] - uv[indices][valid], axis=1)
+        if np.median(pixel_error) > 1.5:
+            return None
+        depth_factor = float(np.median(predicted[valid, 2] / observed[valid, 2]))
+        if not 0.5 < depth_factor < 2:
+            return None
+        observed *= depth_factor
+        agree = valid & (np.abs(observed[:, 2] - predicted[:, 2]) < tolerance)
+        if agree.sum() < required:
+            return None
     # RGB-D registration constrains out-of-plane rotation of thin links, which
     # can be poorly determined by single-view PnP. Use it only when both 3D
     # distances and reprojections agree after outlier rejection.
@@ -229,7 +257,7 @@ def _pose_from_pairs(matches, depth, K, mask, scale):
     if best.sum() >= max(6, len(local3) * 0.60):
         pose = _rigid(local3[best], target3[best])
         pixels = pixels[best]
-    return pose, pixels
+    return pose, pixels, depth_factor
 
 
 class _Link:
@@ -246,6 +274,7 @@ class _Link:
         self.initial_distance = 0
         self.rows = []
         self.masks = {}
+        self.depth_factors = {}
 
     def fuse(self, rgb, depth, K, mask, pose):
         uv = _mask_sample(mask, 4500)
@@ -322,6 +351,7 @@ class _Link:
                "part_to_world": None, "inliers": 0, "new_points": 0, "fused_samples": 0}
         self.rows.append(row)
         mask = None
+        depth_factor = 1.
         if masks is not None:
             value = masks.get(idx) if isinstance(masks, dict) else masks[idx]
             if value is not None:
@@ -355,12 +385,16 @@ class _Link:
         else:
             saved_matches = _describe_matches(self.keys, features, matcher)
             matches = list(saved_matches)
+            flowed = None
             if self.last is not None and self.last[0] == idx - 1:
                 flowed = _flow(self.last, gray)
                 if flowed is not None:
                     matches.insert(0, flowed)
             allowed = _hue_region(hsv, self.hue) if self.hue is not None and mask is None else mask
-            result = _pose_from_pairs(matches, depth, K, allowed, self.scale)
+            tracked_area = None
+            if flowed is not None and len(flowed[0]) >= 20 and any(len(p[0]) >= 8 for p in saved_matches):
+                tracked_area = self.initial_area * (self.initial_distance / self.rows[idx - 1]["part_to_camera"][2, 3]) ** 2
+            result = _pose_from_pairs(matches, depth, K, allowed, self.scale, tracked_area, saved_matches)
             if result is None and self.hue is not None and mask is None:
                 # A newly turned face can have a different colour. Reacquire
                 # from many mutually matched, stored texture descriptors and a
@@ -383,7 +417,9 @@ class _Link:
                         result = alternative
             if result is None:
                 return
-            pose, inliers = result
+            pose, inliers, depth_factor = result
+            if depth_factor != 1.:
+                depth = depth * depth_factor
             if mask is None:
                 mask = self.projected_mask(rgb, depth, K, pose, inliers)
                 if allowed is not None:
@@ -401,6 +437,8 @@ class _Link:
             if len(inliers) and np.count_nonzero(_inside(mask, inliers)) < max(4, len(inliers)//3):
                 mask = np.zeros_like(mask)
 
+        if depth_factor != 1.:
+            self.depth_factors[idx] = depth_factor
         new_points, n = self.fuse(rgb, depth, K, mask, pose)
         row.update(status="observed", part_to_camera=pose, inliers=len(inliers),
                    part_to_world=camera @ pose if camera is not None else None,
@@ -420,14 +458,16 @@ class _Link:
                         # Keep the first appearance and recent keyframes.
                         self.keys.pop(1)
 
-    def refine(self, frames, grays, depths, ks, cameras, plane_features, allow_focal_refit):
+    def refine(self, frames, grays, depths, ks, cameras, plane_features, allow_focal_refit, times):
         from video_bundle import refine_part_poses
         from video_shape import refine_surface_depths
 
+        if self.depth_factors:
+            depths = [z * self.depth_factors[i] if i in self.depth_factors else z for i, z in enumerate(depths)]
         if not self.masks:
             return depths
         updates = refine_part_poses(grays, depths, ks, self.rows, self.masks, self.scale,
-                                    plane_features, allow_focal_refit)
+                                    plane_features, allow_focal_refit, frames=frames, times=times)
         for i, pose in updates.items():
             self.rows[i]["part_to_camera"] = pose
             if cameras is not None:
@@ -442,7 +482,7 @@ class _Link:
             row.update(new_points=count, fused_samples=samples)
         return shape_depths
 
-    def finish(self, cameras, times, depths, ks, occupied):
+    def finish(self, cameras, times, depths, ks, occupied, frames=None):
         observed = [i for i, row in enumerate(self.rows) if row["status"] == "observed"]
         for a, b in zip(observed, observed[1:]):
             if b == a + 1:
@@ -461,9 +501,13 @@ class _Link:
                     row.update(part_to_world=pose, part_to_camera=_inverse(cameras[i]) @ pose)
         samples = np.asarray([m for m, _ in self.voxels.values()]).reshape(-1, 6)
         if len(samples):
-            from video_shape import surface_consensus
+            from video_shape import surface_consensus, visible_color_consensus
 
             keep = surface_consensus(samples[:, :3], depths, ks, self.rows, self.masks, self.scale, occupied=occupied)
+            if frames is not None:
+                ids = np.flatnonzero(keep)
+                keep[ids] = visible_color_consensus(samples[ids, :3], samples[ids, 3:], frames,
+                                                    depths, ks, self.rows, self.masks, self.scale, occupied)
             # Dictionary insertion order gives a surviving voxel its first observed frame.
             first_seen = np.repeat(np.arange(len(self.rows)), [r["new_points"] for r in self.rows])
             counts = np.bincount(first_seen[keep], minlength=len(self.rows))
@@ -523,11 +567,12 @@ def reconstruct_parts(frames, depths, intrinsics, parts, camera_poses=None, prog
     if len(links) > 1:
         for link in links:
             for i, mask in link.masks.items():
-                occupied[i] = mask | occupied[i] if i in occupied else mask
+                foreground = (mask != 0).astype(np.uint8)
+                occupied[i] = occupied[i] + foreground if i in occupied else foreground
     results = []
     for link in links:
         if progress is not None:
             progress(f"Refining rigid part {link.name} across observed views")
-        shape_depths = link.refine(frames, grays, depths, ks, cameras, plane_features, allow_focal_refit)
-        results.append(link.finish(cameras, times, shape_depths, ks, occupied))
+        shape_depths = link.refine(frames, grays, depths, ks, cameras, plane_features, allow_focal_refit, times)
+        results.append(link.finish(cameras, times, shape_depths, ks, occupied, frames))
     return results

@@ -150,6 +150,7 @@ const evaluator = fileURLToPath(new URL('./video_quality.py', import.meta.url));
 const qualityArgs = [evaluator, path.join(example, 'truth.json'), destination, '--check-demo'];
 if (process.env.VIDEO_BASELINE_SCENE) qualityArgs.push('--baseline', process.env.VIDEO_BASELINE_SCENE);
 if (process.env.VIDEO_QUALITY_REPORT) qualityArgs.push('--output', process.env.VIDEO_QUALITY_REPORT);
+if (process.env.VIDEO_SURFACE_REFERENCE) qualityArgs.push('--reference', process.env.VIDEO_SURFACE_REFERENCE);
 const quality = execFileSync('python', qualityArgs, {encoding: 'utf8'});
 report.push(...quality.trim().split('\n'));
 console.log(report.join('\n'));

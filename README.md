@@ -30,6 +30,9 @@
 
 公開デモは2部品が前後に重なって再び離れる合成動画です。推定器に与える情報は通常のRGB動画と最初の囲みだけです。復元後にシミュレーションの正解姿勢・形状と照合し、3D回転のRMSE（度）、画像上の輪郭のIoU、厚さと長さの比、観測・補間したコマ数を実行ログと quality.json に記録します。
 
+[動画復元で参照した論文と評価方法](VIDEO_ACCURACY.md) · [公開デモの精度データ](https://temesotejam.github.io/mast3r-photo-to-3d/video-example/quality.json)
+
+
 GitHub Actionsから自分の素材を処理するには、動画と囲みJSONのパスを [動画ワークフロー](https://github.com/temesotejam/mast3r-photo-to-3d/actions/workflows/video.yml) に指定します。**公開リポジトリにコミットした素材は公開されます。** 入力JSONの `box` は、先頭フレーム上の左・上・右・下を0〜1に正規化した値です。
 
 ```json

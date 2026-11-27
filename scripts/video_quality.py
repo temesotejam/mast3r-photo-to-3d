@@ -128,10 +128,12 @@ def main():
     parser.add_argument('scene', type=Path)
     parser.add_argument('--baseline', type=Path, help='Optional older scene reconstructed from the same clip')
     parser.add_argument('--output', type=Path, help='Write measurements, including per-frame values, as JSON')
+    parser.add_argument('--reference', type=Path, help='Renderer reference arrays for visible-surface precision and recall')
     parser.add_argument('--check-demo', action='store_true', help='Check accuracy for the public two-link fixture')
     args = parser.parse_args()
     truth = json.loads(args.truth.read_text())
-    current = evaluate(truth, json.loads(args.scene.read_text()))
+    scene = json.loads(args.scene.read_text())
+    current = evaluate(truth, scene)
     report = {'current': current}
     for name, value in current.items():
         counts = value['status_counts']
@@ -142,7 +144,8 @@ def main():
               f"{counts['observed']} observed / {counts['interpolated']} interpolated / "
               f"{counts['unavailable']} unavailable.")
     if args.baseline:
-        previous = evaluate(truth, json.loads(args.baseline.read_text()))
+        previous_scene = json.loads(args.baseline.read_text())
+        previous = evaluate(truth, previous_scene)
         report['baseline'] = previous
         report['comparison'] = compare(current, previous)
         for name, p in report['comparison'].items():
@@ -151,6 +154,18 @@ def main():
                   f"all-frame outline IoU {p['outline_iou_before']:.4f} -> {p['outline_iou_after']:.4f}; "
                   f"absolute thickness/length error {p['thickness_ratio_error_before']:.3f} -> "
                   f"{p['thickness_ratio_error_after']:.3f}.")
+    if args.reference:
+        from video_surface_quality import evaluate_surface
+
+        surfaces = {'current': evaluate_surface(truth, scene, args.reference)}
+        if args.baseline:
+            surfaces['baseline'] = evaluate_surface(truth, previous_scene, args.reference)
+        report['visible_surfaces'] = surfaces
+        for version, parts in surfaces.items():
+            for name, scores in parts.items():
+                print(f"{name} ({version}): visible surface precision {scores['precision']:.3f}, "
+                      f"recall {scores['recall']:.3f}, F-score {scores['f_score']:.3f} "
+                      f"at {100 * scores['tolerance_over_length']:.1f}% of part length.")
     if args.output:
         args.output.write_text(json.dumps(report, indent=2, allow_nan=False) + '\n')
     if args.check_demo:

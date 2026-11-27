@@ -72,24 +72,24 @@ def _landmark_tracks(grays, views, depths, intrinsics, masks, poses):
     return tracks
 
 
-def _surface_rotations(grays, masks, ks, views, features, allow_focal_refit):
+def _surface_geometry(grays, masks, ks, views, features, allow_focal_refit):
     """Recover metric rotations of a textured plane without using predicted surface slopes."""
     from video_calibration import plane_warps, _fit_plane
 
     if len(views) < 5:
-        return {}
+        return None
     source = views[0]
     warps = plane_warps([grays[v] for v in views], masks[source],
                          features=[features[v] for v in views])
     # Discard patches which now map mainly onto another moving part.
     template_corners = cv2.goodFeaturesToTrack(grays[source], 180, .008, 4, mask=masks[source])
     if template_corners is None:
-        return {}
+        return None
     warps = {i: H for i, H in warps.items()
              if np.mean(_inside(cv2.perspectiveTransform(template_corners, H).reshape(-1, 2),
                                 masks[views[i]])) >= .2}
     if len(warps) < 4:
-        return {}
+        return None
     ids = np.array(list(warps))
     homographies = np.array(list(warps.values()))
     rays = np.linalg.inv(ks[np.array(views)[ids]]) @ homographies @ ks[source]
@@ -121,12 +121,13 @@ def _surface_rotations(grays, masks, ks, views, features, allow_focal_refit):
         if inferred is not None:
             f = inferred[0] * w
             k = np.array([[f, 0., (w-1)/2], [0., f, (h-1)/2], [0., 0., 1.]])
+            ks = np.broadcast_to(k, ks.shape)
             rays = np.linalg.inv(k) @ homographies @ k
             fit = estimate(rays)
     errors = np.linalg.norm(error(fit.x, rays).reshape(-1, 2), axis=1)
     if (np.median(errors) > .025 or np.max(np.abs(fit.x)) > 2.95
             or np.linalg.svd(fit.jac, compute_uv=False)[-1] < .06):
-        return {}
+        return None
     basis = tangent(fit.x)
     source_basis = np.column_stack((basis, np.cross(*basis.T)))
     rotations = {}
@@ -138,10 +139,10 @@ def _surface_rotations(grays, masks, ks, views, features, allow_focal_refit):
         u, _, vt = np.linalg.svd(ray @ basis, full_matrices=False)
         warped = u @ vt
         rotations[i] = np.column_stack((warped, np.cross(*warped.T))) @ source_basis.T
-    return rotations
+    return rotations, warps, np.r_[fit.x, 1.], ks
 
 
-def _refine_window(grays, depths, intrinsics, poses, masks, scale, views, features, allow_focal_refit):
+def _refine_window(grays, depths, intrinsics, poses, masks, scale, views, features, allow_focal_refit, frames, times):
     if len(views) < 3:
         return {}
     tracks = _landmark_tracks(grays, views, depths, intrinsics, masks, poses)
@@ -186,7 +187,14 @@ def _refine_window(grays, depths, intrinsics, poses, masks, scale, views, featur
     principal = Ks[fi, :2, 2]
     initial_pose = np.column_stack((Rotation.from_matrix(used_poses[:, :3, :3]).as_rotvec(),
                                     used_poses[:, :3, 3] / scale))
-    planar = _surface_rotations(grays, masks, intrinsics, views, features, allow_focal_refit)
+    surface = _surface_geometry(grays, masks, intrinsics, views, features, allow_focal_refit)
+    planar, recovered = {}, {}
+    if surface is not None:
+        planar, warps, normal, surface_intrinsics = surface
+        if frames is not None and planar:
+            from video_pose_memory import recover_surface_poses
+            recovered = recover_surface_poses(frames, masks, surface_intrinsics, views, warps, planar,
+                                              normal, depths, poses, times)
     rotations0 = used_poses[:, :3, :3].copy()
     free = []
     for j, i in enumerate(views_used[1:], start=1):
@@ -234,8 +242,12 @@ def _refine_window(grays, depths, intrinsics, poses, masks, scale, views, featur
     rotations, centers, _ = unpack(fit.x)
     before = np.linalg.norm(residual(guess).reshape(-1, 3)[:, :2], axis=1)
     after = np.linalg.norm(residual(fit.x).reshape(-1, 3)[:, :2], axis=1)
-    result = {}
+    # A partially occluding object may supply a majority of the sparse tracks.
+    # Preserve a separately validated RGB alignment when those tracks disagree.
+    result = {views[i]: pose for i, pose in recovered.items()}
     for j in range(1, n_views):
+        if views_used[j] in recovered:
+            continue
         chosen = fi == j
         good = chosen & (after < 3)
         if (good.sum() < max(10, 0.55 * chosen.sum())
@@ -250,11 +262,12 @@ def _refine_window(grays, depths, intrinsics, poses, masks, scale, views, featur
     return result
 
 
-def refine_part_poses(grays, depths, intrinsics, rows, masks, scale, features, allow_focal_refit):
+def refine_part_poses(grays, depths, intrinsics, rows, masks, scale, features, allow_focal_refit, frames=None, times=None):
     """Refine connected observations in bounded windows. Unobserved poses are never fitted."""
     views = sorted(i for i, m in masks.items() if m.any() and rows[i]["status"] == "observed")
     poses = {i: rows[i]["part_to_camera"] for i in views}
     updates = {}
+    times = np.arange(len(grays)) if times is None else times
     # A shared anchor links neighbouring windows. Restricting each solve to 24
     # views bounds both optical-flow matching and the sparse landmark system.
     if len(views) < 3:
@@ -264,7 +277,7 @@ def refine_part_poses(grays, depths, intrinsics, rows, masks, scale, features, a
     for start, end in zip(boundaries, boundaries[1:]):
         window = views[start:end+1]
         refined = _refine_window(grays, depths, intrinsics, poses, masks, scale, window, features,
-                                 allow_focal_refit)
+                                 allow_focal_refit, frames, times)
         poses.update(refined)
         updates.update(refined)
     return updates

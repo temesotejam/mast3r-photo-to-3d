@@ -186,3 +186,58 @@ def refine_surface_depths(grays, depths, intrinsics, rows, masks, scale):
                 result = list(depths)
             result[i] = depth
     return result
+
+
+def visible_color_consensus(points, colors, frames, depths, intrinsics, rows, masks, scale, occupied=None):
+    """Prune fused points repeatedly contradicted by the RGB views that can see them.
+
+    Inspired by voxel coloring (Seitz & Dyer). A foreground depth buffer prevents
+    the hidden side of a part from being penalized for the front surface's color.
+    Geometry, lighting and segmentation uncertainty leave a neutral voting band.
+    """
+    views = [i for i in sorted(masks) if rows[i]["status"] == "observed" and masks[i].any()]
+    if not len(points) or len(views) < 3:
+        return np.ones(len(points), dtype=bool)
+    if len(views) > 32:
+        views = [views[j] for j in np.linspace(0, len(views) - 1, 32).round().astype(int)]
+    ks = np.broadcast_to(intrinsics, (len(rows), 3, 3))
+    support = np.zeros(len(points), np.int16)
+    conflict = np.zeros_like(support)
+    colors = np.asarray(colors, dtype=np.float32)
+    margin = np.ones((5, 5), np.uint8)
+    for i in views:
+        pose = rows[i]["part_to_camera"]
+        k = ks[i]
+        camera = points @ pose[:3, :3].T + pose[:3, 3]
+        z = camera[:, 2]
+        uv = camera[:, :2] / np.maximum(z[:, None], 1e-7) * k.diagonal()[:2] + k[:2, 2]
+        h, w = masks[i].shape
+        ids = np.flatnonzero((z > 0) & (uv[:, 0] >= 2) & (uv[:, 0] <= w - 3)
+                             & (uv[:, 1] >= 2) & (uv[:, 1] <= h - 3))
+        if not len(ids):
+            continue
+        x, y = np.rint(uv[ids]).astype(np.intp).T
+        z = z[ids]
+        front = np.full((h, w), np.inf, np.float32)
+        np.minimum.at(front, (y, x), z)
+        nearest = minimum_filter(front, size=3)[y, x]
+        measured = np.asarray(depths[i])
+        far = maximum_filter(np.where(np.isfinite(measured) & (measured > 0), measured, -np.inf), size=5)
+        visible = (z <= nearest + 0.04 * scale) & (z <= far[y, x] + 0.08 * scale)
+        inside = masks[i][y, x] != 0
+        possible = masks[i] if occupied is None or i not in occupied else occupied[i]
+        # Two competing foreground masks cannot identify which color is visible.
+        if occupied is not None and i in occupied:
+            visible &= possible[y, x] <= 1
+        outside = cv2.dilate(possible.astype(np.uint8), margin)[y, x] == 0
+
+        distance = np.full(len(ids), np.inf, np.float32)
+        for dy in (-2, 0, 2):
+            for dx in (-2, 0, 2):
+                rgb_error = frames[i][y + dy, x + dx].astype(np.float32) - colors[ids]
+                # Tolerate mild exposure changes and two pixels of reprojection uncertainty.
+                rgb_error -= 0.5 * rgb_error.mean(axis=1, keepdims=True)
+                distance = np.minimum(distance, (rgb_error**2).mean(axis=1))
+        support[ids] += visible & inside & (distance < 24**2)
+        conflict[ids] += visible & (outside | (inside & (distance > 36**2)))
+    return ~((conflict >= 3) & (conflict > 1 + 1.5 * support))

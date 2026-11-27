@@ -12,9 +12,11 @@ on:
       - 'video_depth.py'
       - 'video_shape.py'
       - 'video_bundle.py'
+      - 'video_pose_memory.py'
       - 'server.py'
       - 'scripts/verify_video.mjs'
       - 'scripts/video_quality.py'
+      - 'scripts/video_surface_quality.py'
       - 'scripts/make_video_example.py'
   workflow_dispatch:
     inputs:
@@ -135,7 +137,7 @@ jobs:
         shell: bash
         run: |
           example="$RUNNER_TEMP/generated-video"
-          python scripts/make_video_example.py --output-dir "$example"
+          python scripts/make_video_example.py --output-dir "$example" --reference-arrays "$example/reference.npz"
           mkdir -p result
           python -u server.py > "$RUNNER_TEMP/video-server.log" 2>&1 &
           server=$!
@@ -145,7 +147,7 @@ jobs:
           if cmp -s "$example/video.mp4" "$published/video.mp4" && cmp -s "$example/parts.json" "$published/parts.json"; then
             export VIDEO_BASELINE_SCENE="$published/scene.json"
           fi
-          VIDEO_QUALITY_REPORT=result/quality.json node scripts/verify_video.mjs "$example" result/scene.json
+          VIDEO_SURFACE_REFERENCE="$example/reference.npz" VIDEO_QUALITY_REPORT=result/quality.json node scripts/verify_video.mjs "$example" result/scene.json
 
       - uses: actions/upload-artifact@v4
         with:
