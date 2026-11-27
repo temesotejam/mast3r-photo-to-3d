@@ -121,7 +121,11 @@ function saveJob(id) {
 }
 
 class ApiError extends Error {
-  constructor(text, retryable = false) { super(text); this.retryable = retryable; }
+  constructor(text, retryable = false, status = 0) {
+    super(text);
+    this.retryable = retryable;
+    this.status = status;
+  }
 }
 
 async function request(path, init = {}, timeout = 45000) {
@@ -137,7 +141,7 @@ async function request(path, init = {}, timeout = 45000) {
   } finally { clearTimeout(timer); }
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
-    throw new ApiError(detail.message || 'サーバーからエラーが返りました (HTTP ' + response.status + ')。', response.status >= 500);
+    throw new ApiError(detail.message || 'サーバーからエラーが返りました (HTTP ' + response.status + ')。', response.status >= 500, response.status);
   }
   return response;
 }
@@ -208,6 +212,7 @@ async function pollJob(id) {
       result = await json(await request(path));
       failures = 0;
     } catch (error) {
+      if (error.status === 404) saveJob(null);
       if (!error.retryable || ++failures > 3) throw error;
       message('job-state', '接続を再確認しています…');
       await pause(2500 * failures);
@@ -219,7 +224,13 @@ async function pollJob(id) {
     }
     if (result.status === 'done') {
       message('job-state', '復元完了。点群を読み込んでいます…');
-      const response = await request(path + '/cloud.ply', {}, 120000);
+      let response;
+      try {
+        response = await request(path + '/cloud.ply', {}, 120000);
+      } catch (error) {
+        if (error.status === 404) saveJob(null);
+        throw error;
+      }
       await displayCloud(await response.blob(), 'reconstruction.ply', true);
       saveJob(null);
       message('job-state', '復元が完了しました。');
