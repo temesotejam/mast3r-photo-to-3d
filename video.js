@@ -255,7 +255,8 @@ canvas.addEventListener('pointerup', e => {
   if (drag?.id !== e.pointerId) return;
   const rect = area([...drag.rect.slice(0,2), ...pointer(e)]);
   drag = null;
-  if ((rect[2]-rect[0])*canvas.width >= 5 && (rect[3]-rect[1])*canvas.height >= 5) {
+  if (Math.round((rect[2]-rect[0])*capture.videoWidth) >= 8 &&
+      Math.round((rect[3]-rect[1])*capture.videoHeight) >= 8) {
     let n = boxes.length + 1; while (boxes.some(p => p.name === '部品 ' + n)) n++;
     boxes.push({name: '部品 ' + n, box: rect});
     tell('job-msg', '');
