@@ -2,11 +2,11 @@
 
 同じ被写体を異なる位置から撮った写真 **2〜10枚** を、NAVERのMASt3Rで一括処理する小さなアプリです。復元したカラー点群は、ブラウザで回転・拡大して確認し、PLYで保存できます。入力形式はJPEGとPNGです。
 
-**[GitHubでアプリを起動](https://codespaces.new/temesotejam/mast3r-photo-to-3d?quickstart=1)** · [バッチ復元の実行履歴](https://github.com/temesotejam/mast3r-photo-to-3d/actions/workflows/reconstruct.yml)
+**[GitHub Pagesで操作画面を開く](https://temesotejam.github.io/mast3r-photo-to-3d/)** · [Codespacesで復元する](https://codespaces.new/temesotejam/mast3r-photo-to-3d?quickstart=1) · [バッチ復元の実行履歴](https://github.com/temesotejam/mast3r-photo-to-3d/actions/workflows/reconstruct.yml)
 
 ## 自分の写真を使う
 
-1. 上の「GitHubでアプリを起動」を開き、GitHubにサインインして、このリポジトリのCodespaceを作成または再開します。
+1. 上の「Codespacesで復元する」を開き、GitHubにサインインして、このリポジトリのCodespaceを作成または再開します。
 2. 初回はPython環境を自動で準備します。作業画面の **Ports（ポート）** に `7861` が現れたら、その行の地球アイコンからアプリを開きます。
 3. 同じ被写体の写真を2〜10枚選び、**「3Dを復元」** を押します。初回の復元ではモデルもダウンロードします。画面に完了と表示されるまでCodespaceを起動したままにします。
 4. 点群をドラッグして回し、ホイールで拡大します。**「PLYを保存」** で手元に保存できます。利用後は [Codespaces一覧](https://github.com/codespaces) から作業環境を停止できます。

@@ -1,0 +1,40 @@
+name: Publish photo viewer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: publish-photo-viewer
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Publish docs to the Pages branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --depth=1 origin gh-pages
+          previous=$(git rev-parse FETCH_HEAD)
+          site=$(git rev-parse HEAD:docs)
+          if [ "$site" != "$(git rev-parse "$previous^{tree}")" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            revision=$(git commit-tree "$site" -p "$previous" -m "Publish viewer from $(git rev-parse --short HEAD)")
+            git push origin "$revision:refs/heads/gh-pages"
+          fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds" --silent
