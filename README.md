@@ -4,6 +4,12 @@
 
 **[GitHub Pagesで操作画面を開く](https://temesotejam.github.io/mast3r-photo-to-3d/)** · [Codespacesで復元する](https://codespaces.new/temesotejam/mast3r-photo-to-3d?quickstart=1) · [バッチ復元の実行履歴](https://github.com/temesotejam/mast3r-photo-to-3d/actions/workflows/reconstruct.yml)
 
+## 写真4枚から復元した点群
+
+[中庭の点群をブラウザで回して見る](https://temesotejam.github.io/mast3r-photo-to-3d/?sample=1) · [カラーPLYをダウンロード](https://temesotejam.github.io/mast3r-photo-to-3d/sample.ply) · [入力写真と出典](docs/examples/courtyard/)
+
+公開データセットETH3Dの中庭を異なる位置から撮った4枚を、アプリの写真受付APIに送って生成した実例です。この表示にはサインインも計算環境の起動も必要ありません。
+
 ## 自分の写真を使う
 
 1. 上の「Codespacesで復元する」を開き、GitHubにサインインして、このリポジトリのCodespaceを作成または再開します。
