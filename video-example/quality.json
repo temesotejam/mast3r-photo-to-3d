@@ -231,107 +231,107 @@
         "interpolated": 2,
         "unavailable": 0
       },
-      "rotation_rmse_deg": 5.37257999349899,
-      "outline_iou": 0.8470362372333016,
-      "thickness_over_length": 0.17936627838362162,
+      "rotation_rmse_deg": 1.9701511692686413,
+      "outline_iou": 0.8430859518251732,
+      "thickness_over_length": 0.17081500534940422,
       "true_thickness_over_length": 0.1320754716981132,
-      "thickness_ratio_error": 0.04729080668550842,
+      "thickness_ratio_error": 0.038739533651291014,
       "by_frame": {
         "0": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.0,
-          "iou": 0.8523719364678658
+          "iou": 0.8487390524427562
         },
         "1": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 1.5496327729457964,
-          "iou": 0.8496538603815462
+          "iou": 0.8462354188759279
         },
         "2": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 3.064253137789834,
-          "iou": 0.8539462547608971
+          "iou": 0.8497692430109809
         },
         "3": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 2.9141816290774254,
-          "iou": 0.8311193437417306
+          "iou": 0.8274378585086042
         },
         "4": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.4377363785672304,
-          "iou": 0.8056727119358921
+          "iou": 0.7997991118629731
         },
         "5": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 1.0729560364211286,
-          "iou": 0.79003614647179
+          "iou": 0.784528063905823
         },
         "6": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.2183789178898312,
-          "iou": 0.7903562846097586
+          "iou": 0.7845605202433397
         },
         "7": {
           "status": "observed",
           "fully_hidden": false,
-          "rotation_deg": 17.136758722483147,
-          "iou": 0.8251759352346685
+          "rotation_deg": 1.1020490032724386,
+          "iou": 0.8184585281008805
         },
         "8": {
           "status": "interpolated",
           "fully_hidden": true,
-          "rotation_deg": 10.346263387213941,
-          "iou": 0.8397740470911202
+          "rotation_deg": 1.7397779412163883,
+          "iou": 0.8458476470908992
         },
         "9": {
           "status": "interpolated",
           "fully_hidden": false,
-          "rotation_deg": 3.3235487199446787,
-          "iou": 0.8531687155574396
+          "rotation_deg": 2.790766899132692,
+          "iou": 0.8605538595726123
         },
         "10": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 4.280319666719477,
-          "iou": 0.8578552278820375
+          "iou": 0.8535859269282815
         },
         "11": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 1.97323997756596,
-          "iou": 0.870083041958042
+          "iou": 0.8646533671332525
         },
         "12": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 1.2665549031955157,
-          "iou": 0.8783288948069241
+          "iou": 0.8728168383340797
         },
         "13": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.838587442241167,
-          "iou": 0.8827898146079964
+          "iou": 0.8759497945629537
         },
         "14": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 1.7174753177727557,
-          "iou": 0.8863969345204553
+          "iou": 0.878512631280159
         },
         "15": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.9634760081957126,
-          "iou": 0.8858506457046603
+          "iou": 0.8779273673492477
         }
       }
     },
@@ -343,106 +343,106 @@
         "unavailable": 0
       },
       "rotation_rmse_deg": 0.2744728364318277,
-      "outline_iou": 0.8165422780583813,
-      "thickness_over_length": 0.12525432111933715,
+      "outline_iou": 0.8504902645388442,
+      "thickness_over_length": 0.12216738384287006,
       "true_thickness_over_length": 0.12698412698412698,
-      "thickness_ratio_error": 0.001729805864789824,
+      "thickness_ratio_error": 0.004816743141256921,
       "by_frame": {
         "0": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.0,
-          "iou": 0.8296184359652437
+          "iou": 0.8576388888888888
         },
         "1": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.9218184850573571,
-          "iou": 0.8170216292367615
+          "iou": 0.8465304019237375
         },
         "2": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.1744573789287141,
-          "iou": 0.8138264862852178
+          "iou": 0.8427298432010968
         },
         "3": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.3035609635180455,
-          "iou": 0.7969881500987491
+          "iou": 0.8276009399700919
         },
         "4": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.03489507169713851,
-          "iou": 0.7785251414978263
+          "iou": 0.8099159448734906
         },
         "5": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.11366549871064371,
-          "iou": 0.7635836954272709
+          "iou": 0.7967184801381693
         },
         "6": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.10043965149666044,
-          "iou": 0.7485477178423237
+          "iou": 0.7822052638425183
         },
         "7": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.06681276085319922,
-          "iou": 0.7538117335101093
+          "iou": 0.7881649627447582
         },
         "8": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.04565821898109615,
-          "iou": 0.7736563517915309
+          "iou": 0.8130857118404724
         },
         "9": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.051691652171147386,
-          "iou": 0.7957036917620506
+          "iou": 0.8379525487033658
         },
         "10": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.26594602754055846,
-          "iou": 0.8307385066840561
+          "iou": 0.8737568587105624
         },
         "11": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.04770197774843664,
-          "iou": 0.8490781997302048
+          "iou": 0.8884610447952767
         },
         "12": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.08603368209739055,
-          "iou": 0.8601558356790274
+          "iou": 0.8962115736213274
         },
         "13": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.14356463414202125,
-          "iou": 0.8766116449043279
+          "iou": 0.9089708638609644
         },
         "14": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.0728861631063116,
-          "iou": 0.8888015879579853
+          "iou": 0.9194142331078188
         },
         "15": {
           "status": "observed",
           "fully_hidden": false,
           "rotation_deg": 0.305380766010184,
-          "iou": 0.8880076405614151
+          "iou": 0.9184866723989682
         }
       }
     }
@@ -450,20 +450,20 @@
   "comparison": {
     "teal-link": {
       "shared_poses": 16,
-      "rotation_rmse_deg_before": 5.37257999349899,
+      "rotation_rmse_deg_before": 1.9701511692686413,
       "rotation_rmse_deg_after": 1.9701511692686413,
-      "outline_iou_before": 0.8470362372333016,
+      "outline_iou_before": 0.8430859518251732,
       "outline_iou_after": 0.8430859518251732,
-      "thickness_ratio_error_before": 0.04729080668550842,
+      "thickness_ratio_error_before": 0.038739533651291014,
       "thickness_ratio_error_after": 0.038739533651291014
     },
     "amber-link": {
       "shared_poses": 16,
       "rotation_rmse_deg_before": 0.2744728364318277,
       "rotation_rmse_deg_after": 0.2744728364318277,
-      "outline_iou_before": 0.8165422780583813,
+      "outline_iou_before": 0.8504902645388442,
       "outline_iou_after": 0.8504902645388442,
-      "thickness_ratio_error_before": 0.001729805864789824,
+      "thickness_ratio_error_before": 0.004816743141256921,
       "thickness_ratio_error_after": 0.004816743141256921
     }
   },
@@ -500,31 +500,31 @@
     },
     "baseline": {
       "teal-link": {
-        "precision": 0.6619744744744744,
-        "recall": 0.7611362882723555,
-        "f_score": 0.7081006027387898,
+        "precision": 0.6598400624146674,
+        "recall": 0.7464352824140599,
+        "f_score": 0.7004715045993912,
         "reference_points": 18094,
-        "reconstruction_points": 10656,
+        "reconstruction_points": 10254,
         "tolerance_over_length": 0.02,
-        "alignment_scale": 1.0070867933532495,
+        "alignment_scale": 1.0121391550401841,
         "alignment_translation_over_length": [
-          0.554656785117364,
-          -0.004345443547542719,
-          -0.025687503351342143
+          0.5511181735076314,
+          -0.0032150634566996098,
+          -0.0242116148339259
         ]
       },
       "amber-link": {
-        "precision": 0.76508209240168,
-        "recall": 0.794818070318888,
-        "f_score": 0.779666656688685,
+        "precision": 0.7694189004108785,
+        "recall": 0.7966578086672118,
+        "f_score": 0.7828014701901828,
         "reference_points": 19568,
-        "reconstruction_points": 10476,
+        "reconstruction_points": 10222,
         "tolerance_over_length": 0.02,
-        "alignment_scale": 0.8470297734689987,
+        "alignment_scale": 0.8517139278238733,
         "alignment_translation_over_length": [
-          0.5348193764156524,
-          0.010454954087405391,
-          -0.032654900817649046
+          0.5326830251193275,
+          0.010499315621040606,
+          -0.03197553979442347
         ]
       }
     }
