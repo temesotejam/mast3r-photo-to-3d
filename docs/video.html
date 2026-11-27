@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f6f2">
+  <title>動画から3D動作を復元 · MASt3R</title>
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./video.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap brand-row">
+      <div class="brand"><span class="brand-icon" aria-hidden="true">3D</span><b>MASt3R</b><span class="brand-line"></span><span>Video to 3D</span></div>
+      <a class="source" href="./">写真から復元</a>
+    </div>
+  </header>
+  <main class="wrap">
+    <div class="intro"><h1>動画から3D動作を復元</h1><p>部品ごとの点群と姿勢を、元動画に合わせて再生します。</p></div>
+    <section class="panel" aria-labelledby="scene-title">
+      <div class="panel-title">
+        <h2 id="scene-title">動作ビュー</h2>
+        <div class="toolbar">
+          <button class="subbutton" id="sample" type="button">サンプルを開く</button>
+          <button class="subbutton" id="open-scene" type="button">JSONを開く</button>
+          <input class="sr-file" id="scene-file" type="file" tabindex="-1" accept=".json,application/json">
+          <a class="subbutton save" id="save" download="scene.json" hidden>JSONを保存</a>
+        </div>
+      </div>
+      <div class="comparison">
+        <div class="clip-pane">
+          <h3>入力動画</h3>
+          <video id="source" controls playsinline muted preload="metadata" aria-label="対応する入力動画"></video>
+          <span class="clip-empty" id="clip-empty">対応する動画はありません</span>
+        </div>
+        <div class="cloud-pane">
+          <h3>3D点群</h3>
+          <canvas id="motion" aria-label="3D動作。ドラッグで回転、ホイールで拡大縮小"></canvas>
+          <button class="fit-view" id="fit-view" type="button" disabled>全体表示</button>
+        </div>
+      </div>
+      <div class="play-controls">
+        <button class="subbutton play-button" id="play" type="button" disabled>再生</button>
+        <input id="timeline" type="range" min="0" max="0" value="0" step="1" aria-label="再生フレーム" disabled>
+        <output id="time">0.00 秒</output>
+        <span id="frame">0 / 0</span>
+      </div>
+      <div class="scene-info">
+        <div id="parts-status" aria-label="各部品の追跡状態"></div>
+        <span class="hint" id="view-hint">ドラッグで回転 · スクロールでズーム</span>
+      </div>
+      <p class="scene-msg" id="scene-msg" role="status" aria-live="polite"></p>
+    </section>
+    <section class="panel input-panel" aria-labelledby="video-title">
+      <div class="panel-title"><h2 id="video-title">自分の動画で復元</h2></div>
+      <div class="input-body" id="launch" hidden>
+        <p>復元は自分のCodespaceまたはPCで実行します。Codespacesのポート <code>7861</code> を開き、操作画面で動画モードを選んでください。</p>
+        <div class="launcher"><a class="run launch-link" href="https://codespaces.new/temesotejam/mast3r-photo-to-3d?quickstart=1">GitHubで起動</a>
+          <a href="http://127.0.0.1:7861/video.html">ローカルの動画モード</a></div>
+      </div>
+      <div class="input-body" id="process" hidden>
+        <div class="pick-row"><button id="pick-video" type="button" class="subbutton">動画を選ぶ</button><span id="filename">未選択</span></div>
+        <input type="file" id="video-file" class="sr-file" tabindex="-1" accept=".mp4,.mov,.webm">
+        <p class="hint" id="clip-instructions">30秒以内のMP4・MOV・WebMを選び、最初のフレーム上で別々に動く部品をひとつずつ囲みます。動画全体から最大24フレームを使います。</p>
+        <label class="camera-setting">撮影時のカメラ
+          <select id="camera"><option value="fixed">固定</option><option value="moving">移動（背景からカメラの動きを推定）</option></select>
+        </label>
+        <p class="hint" id="camera-note" hidden>カメラの動きを推定するため、部品の枠の外に模様のある静止した背景を残してください。</p>
+        <div id="editor" class="editor" hidden>
+          <div class="reference"><canvas id="boxes" aria-label="先頭フレームをドラッグして部品の四角い範囲を作成"></canvas></div>
+          <div class="part-editor"><h3>追跡する部品</h3>
+            <div id="part-list" class="part-list"></div>
+            <p class="hint">枠の内側に部品の特徴が収まるように選びます。背景や別の部品が多く入ると追跡精度が下がります。</p>
+            <label class="whole"><input type="checkbox" id="whole"> 画面全体をひとつの対象として追跡</label>
+          </div>
+        </div>
+        <video id="first-frame" muted playsinline preload="auto" hidden></video>
+        <button class="run run-video" type="button" id="run-video" disabled>3D動作を復元</button>
+        <p class="scene-msg" id="job-msg" role="status" aria-live="polite"></p>
+        <button class="subbutton" id="retry-job" type="button" hidden>進捗を再確認</button>
+      </div>
+    </section>
+  </main>
+  <script src="./video.js" type="module"></script>
+</body>
+</html>
