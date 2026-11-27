@@ -1,5 +1,4 @@
-// PLY point positions are expressed in the first camera's coordinate system:
-// X to the right, Y down, Z forward.
+// reconstruct.py exports X right, Y up, with the first camera looking down -Z.
 const scalarTypes = {};
 for (const [names, size, method] of [
   ['char int8', 1, 'getInt8'], ['uchar uint8', 1, 'getUint8'],
@@ -101,8 +100,8 @@ uniform float pointSize;
 void main() {
   float x = turn.x * position.x + turn.y * position.z;
   float z = -turn.y * position.x + turn.x * position.z;
-  float y = -turn.z * position.y - turn.w * z;
-  float depth = -turn.w * position.y + turn.z * z + distanceToCenter;
+  float y = turn.z * position.y - turn.w * z;
+  float depth = distanceToCenter - turn.w * position.y - turn.z * z;
   gl_Position = vec4((vec2(x, y) + pan) * scale, 1.0002 * depth - 0.020002, depth);
   gl_PointSize = pointSize;
   tint = color;
