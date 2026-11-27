@@ -12,6 +12,9 @@ from reconstruct import MODEL, MODEL_REVISION
 from video_depth import estimate_depths
 
 
+SAMPLING = {"standard": (4, 24), "dense": (15, 96)}
+
+
 def load_clip(path, sample_fps=4, max_frames=24):
     cap = cv2.VideoCapture(str(path))
     try:
@@ -99,25 +102,49 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--camera", choices=("fixed", "moving"), default="fixed")
     parser.add_argument("--device", choices=("cpu", "cuda", "auto"), default="auto")
+    parser.add_argument("--sampling", choices=SAMPLING, default="standard",
+                        help="standard: target 4 Hz, up to 24 frames; dense: target 15 Hz, up to 96 frames")
+    parser.add_argument("--horizontal-fov-deg", type=float, metavar="DEGREES",
+                        help="Known horizontal field of view of the cropped input clip (10 to 160 degrees)")
     args = parser.parse_args()
-    frames, times = load_clip(args.video)
+    if args.horizontal_fov_deg is not None and not 10 <= args.horizontal_fov_deg <= 160:
+        parser.error("--horizontal-fov-deg must be between 10 and 160")
+    frames, times = load_clip(args.video, *SAMPLING[args.sampling])
+    sample_rate = (len(frames) - 1) / float(times[-1])
+    print(f"Processing {len(frames)} frames at {sample_rate:.2f} Hz on average.", flush=True)
     height, width = frames[0].shape[:2]
     parts = load_parts(args.parts, width, height)
     z, k = estimate_depths(frames, [p["box"] for p in parts], args.camera, args.device)
+    focal = None
+    intrinsics_source = "mast3r"
+    if args.horizontal_fov_deg is not None:
+        focal = width / (2 * np.tan(np.deg2rad(args.horizontal_fov_deg / 2)))
+        intrinsics_source = "horizontal_fov"
+    else:
+        from video_calibration import estimate_planar_focal
+        focal = estimate_planar_focal(frames, [p["box"] for p in parts])
+        if focal is not None:
+            intrinsics_source = "rigid_plane_tracks"
+    if focal is not None:
+        # Square pixels and principal point at the center of the tracked frame.
+        k = np.array([[focal, 0, (width - 1) / 2], [0, focal, (height - 1) / 2], [0, 0, 1]])
     if args.camera == "moving":
         from video_camera import estimate_camera_poses
         cameras = estimate_camera_poses(frames, z, k, parts)
     else:
         cameras = [np.eye(4) for _ in frames]
     from video_parts import reconstruct_parts
-    reconstructed = reconstruct_parts(frames, z, k, parts, camera_poses=cameras, times=times)
+    reconstructed = reconstruct_parts(frames, z, k, parts, camera_poses=cameras, times=times,
+                                      allow_focal_refit=(intrinsics_source == "mast3r"))
     if all(sum(r["status"] == "observed" for r in p["frames"]) < 2 for p in reconstructed):
         raise ValueError("動画内で部品を継続して追跡できませんでした。最初のコマで模様のある部品を小さめに囲み直してください。")
     output = {"version": 1, "depth_method": "mast3r-pairwise", "model": MODEL,
               "model_revision": MODEL_REVISION, "camera_mode": args.camera,
               "coordinate_system": "opencv", "units": "model scale", "width": width,
               "height": height, "intrinsics": k.ravel().tolist(), "frame_count": len(frames),
-              "fps": (len(frames) - 1) / float(times[-1]), "times": times.round(5).tolist(),
+              "intrinsics_source": intrinsics_source,
+              "horizontal_fov_deg": float(np.rad2deg(2 * np.arctan(width / (2 * k[0, 0])))),
+              "sampling": args.sampling, "fps": sample_rate, "times": times.round(5).tolist(),
               "camera_to_world": [np.round(np.asarray(p)[:3].ravel(), 7).tolist() for p in cameras],
               "parts": serialize_parts(reconstructed)}
     args.output.parent.mkdir(parents=True, exist_ok=True)

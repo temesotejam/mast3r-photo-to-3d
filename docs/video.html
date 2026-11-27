@@ -61,11 +61,19 @@
       <div class="input-body" id="process" hidden>
         <div class="pick-row"><button id="pick-video" type="button" class="subbutton">動画を選ぶ</button><span id="filename">未選択</span></div>
         <input type="file" id="video-file" class="sr-file" tabindex="-1" accept=".mp4,.mov,.webm">
-        <p class="hint" id="clip-instructions">30秒以内のMP4・MOV・WebMを選び、最初のフレーム上で別々に動く部品をひとつずつ囲みます。動画全体から最大24フレームを使います。</p>
+        <p class="hint" id="clip-instructions">30秒以内のMP4・MOV・WebMを選び、最初のフレーム上で別々に動く部品をひとつずつ囲みます。</p>
+        <label class="camera-setting">フレームの抽出
+          <select id="sampling"><option value="dense">細かく追跡（目標15コマ/秒・最大96コマ）</option><option value="standard">軽量（目標4コマ/秒・最大24コマ）</option></select>
+        </label>
+        <p class="hint" id="sampling-note">歩行などの速い動きには、見たい区間を6秒程度に切り出すと細かく追跡できます。長い動画ではコマの間隔が広がり、処理するコマが多いほど時間がかかります。</p>
         <label class="camera-setting">撮影時のカメラ
           <select id="camera"><option value="fixed">固定</option><option value="moving">移動（背景からカメラの動きを推定）</option></select>
         </label>
         <p class="hint" id="camera-note" hidden>カメラの動きを推定するため、部品の枠の外に模様のある静止した背景を残してください。</p>
+        <label class="camera-setting">動画の水平画角（度）
+          <input id="hfov" type="number" min="10" max="160" step="any" placeholder="自動推定" aria-describedby="hfov-note">
+        </label>
+        <p class="hint" id="hfov-note">画角が分かる場合は、ズームや切り抜き後の動画の横幅に対応する値を入力してください。</p>
         <div id="editor" class="editor" hidden>
           <div class="reference"><canvas id="boxes" aria-label="先頭フレームをドラッグして部品の四角い範囲を作成"></canvas></div>
           <div class="part-editor"><h3>追跡する部品</h3>

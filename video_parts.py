@@ -57,7 +57,7 @@ def _component(mask, support):
 
 def _segment(rgb, depth, support, rect, first=False):
     """Use a small ROI so foreground/background fitting is per link."""
-    h, w = depth.shape
+    h, w = support.shape
     xa, ya, xb, yb = rect
     bw, bh = xb - xa, yb - ya
     if min(bw, bh) < 5:
@@ -245,6 +245,7 @@ class _Link:
         self.initial_area = 0
         self.initial_distance = 0
         self.rows = []
+        self.masks = {}
 
     def fuse(self, rgb, depth, K, mask, pose):
         uv = _mask_sample(mask, 4500)
@@ -405,6 +406,7 @@ class _Link:
                    part_to_world=camera @ pose if camera is not None else None,
                    new_points=new_points, fused_samples=n)
         if n:
+            self.masks[idx] = mask
             uv, local = _sample_features(gray, mask, depth, K, pose)
             self.last = idx, gray, uv, local
             uv, desc = features
@@ -418,7 +420,29 @@ class _Link:
                         # Keep the first appearance and recent keyframes.
                         self.keys.pop(1)
 
-    def finish(self, cameras, times):
+    def refine(self, frames, grays, depths, ks, cameras, plane_features, allow_focal_refit):
+        from video_bundle import refine_part_poses
+        from video_shape import refine_surface_depths
+
+        if not self.masks:
+            return depths
+        updates = refine_part_poses(grays, depths, ks, self.rows, self.masks, self.scale,
+                                    plane_features, allow_focal_refit)
+        for i, pose in updates.items():
+            self.rows[i]["part_to_camera"] = pose
+            if cameras is not None:
+                self.rows[i]["part_to_world"] = cameras[i] @ pose
+        shape_depths = refine_surface_depths(grays, depths, ks, self.rows, self.masks, self.scale)
+        if not updates and shape_depths is depths:
+            return depths
+        self.voxels.clear()
+        for i, mask in self.masks.items():
+            row = self.rows[i]
+            count, samples = self.fuse(frames[i], shape_depths[i], ks[i], mask, row["part_to_camera"])
+            row.update(new_points=count, fused_samples=samples)
+        return shape_depths
+
+    def finish(self, cameras, times, depths, ks, occupied):
         observed = [i for i, row in enumerate(self.rows) if row["status"] == "observed"]
         for a, b in zip(observed, observed[1:]):
             if b == a + 1:
@@ -436,6 +460,16 @@ class _Link:
                 if cameras is not None:
                     row.update(part_to_world=pose, part_to_camera=_inverse(cameras[i]) @ pose)
         samples = np.asarray([m for m, _ in self.voxels.values()]).reshape(-1, 6)
+        if len(samples):
+            from video_shape import surface_consensus
+
+            keep = surface_consensus(samples[:, :3], depths, ks, self.rows, self.masks, self.scale, occupied=occupied)
+            # Dictionary insertion order gives a surviving voxel its first observed frame.
+            first_seen = np.repeat(np.arange(len(self.rows)), [r["new_points"] for r in self.rows])
+            counts = np.bincount(first_seen[keep], minlength=len(self.rows))
+            for row, count in zip(self.rows, counts):
+                row["new_points"] = int(count)
+            samples = samples[keep]
         return {"id": self.spec.get("id", self.name), "name": self.name,
                 "points": samples[:, :3].astype("float32"),
                 "colors": np.rint(samples[:, 3:]).clip(0, 255).astype("uint8"),
@@ -443,7 +477,8 @@ class _Link:
                 "new_points_per_frame": [r["new_points"] for r in self.rows]}
 
 
-def reconstruct_parts(frames, depths, intrinsics, parts, camera_poses=None, progress=None, times=None):
+def reconstruct_parts(frames, depths, intrinsics, parts, camera_poses=None, progress=None, times=None,
+                      allow_focal_refit=True):
     """Estimate independent part-to-camera transforms in OpenCV camera coordinates.
 
     Supply uint8 RGB frames, matching positive axial depths (one consistent
@@ -466,6 +501,7 @@ def reconstruct_parts(frames, depths, intrinsics, parts, camera_poses=None, prog
     links = [_Link(spec, (h, w)) for spec in parts]
     orb = cv2.ORB_create(nfeatures=3000, edgeThreshold=8, patchSize=21, fastThreshold=7)
     matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
+    grays = []
     for idx, (rgb, depth, K) in enumerate(zip(frames, depths, ks)):
         if progress is not None:
             progress(f"Tracking rigid parts ({idx + 1}/{n})")
@@ -474,10 +510,24 @@ def reconstruct_parts(frames, depths, intrinsics, parts, camera_poses=None, prog
         if rgb.shape != (h, w, 3) or depth.shape != (h, w):
             raise ValueError("Every RGB and depth frame must share one resolution.")
         gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+        grays.append(gray)
         hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
         keypoints, descriptors = orb.detectAndCompute(gray, None)
         locations = np.array([p.pt for p in keypoints], dtype="float32").reshape(-1, 2)
         for link in links:
             link.observe(idx, rgb, gray, hsv, depth, K, (locations, descriptors), matcher,
                          link.spec.get("masks"), cameras[idx] if cameras is not None else None)
-    return [link.finish(cameras, times) for link in links]
+    from video_calibration import _features
+    plane_features = _features(grays) if any(len(link.masks) >= 5 for link in links) else []
+    occupied = {}
+    if len(links) > 1:
+        for link in links:
+            for i, mask in link.masks.items():
+                occupied[i] = mask | occupied[i] if i in occupied else mask
+    results = []
+    for link in links:
+        if progress is not None:
+            progress(f"Refining rigid part {link.name} across observed views")
+        shape_depths = link.refine(frames, grays, depths, ks, cameras, plane_features, allow_focal_refit)
+        results.append(link.finish(cameras, times, shape_depths, ks, occupied))
+    return results

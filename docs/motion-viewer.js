@@ -11,7 +11,7 @@ function triple(values) {
   return Array.isArray(values) && values.length === 3 && values.every(Number.isFinite);
 }
 
-function readPart(part, frameCount, sceneBounds) {
+function readPart(part, frameCount) {
   if (!Array.isArray(part.points) || !Array.isArray(part.colors) ||
       part.colors.length !== part.points.length) {
     throw new Error('部位の点群または色データが正しくありません。');
@@ -20,14 +20,12 @@ function readPart(part, frameCount, sceneBounds) {
     throw new Error('部位のフレーム数が動画と一致しません。');
   }
 
-  const bounds = newBounds();
   const xyz = new Float32Array(part.points.length * 3);
   const rgb = new Uint8ClampedArray(xyz.length);
   part.points.forEach((point, i) => {
     if (!triple(point) || !triple(part.colors[i])) throw new Error('点群に無効な座標または色があります。');
     xyz.set(point, i * 3);
     rgb.set(part.colors[i], i * 3);
-    for (let axis = 0; axis < 3; axis++) include(bounds, axis, point[axis]);
   });
 
   const poses = part.frames.map(frame => {
@@ -36,24 +34,43 @@ function readPart(part, frameCount, sceneBounds) {
         !Array.isArray(frame.pose) || frame.pose.length !== 12 || !frame.pose.every(Number.isFinite)) {
       throw new Error('部位の姿勢行列または追跡状態が正しくありません。');
     }
-    const pose = frame.pose;
-    if (!xyz.length) return null;
-    // Transform the reference bounding box by each pose, to keep framing fixed during playback.
-    for (let row = 0; row < 3; row++) {
-      let low = pose[row * 4 + 3];
-      let high = low;
-      for (let col = 0; col < 3; col++) {
-        const a = pose[row * 4 + col] * bounds.min[col];
-        const b = pose[row * 4 + col] * bounds.max[col];
-        low += Math.min(a, b);
-        high += Math.max(a, b);
-      }
-      include(sceneBounds, row, low);
-      include(sceneBounds, row, high);
-    }
-    return pose;
+    return xyz.length ? frame.pose : null;
   });
   return {xyz, rgb, poses};
+}
+
+// Estimate visible extents from transformed surface samples. Rotating the corners of an
+// axis-aligned model box can greatly overestimate the space a thin, angled part occupies.
+function motionBounds(parts) {
+  const bounds = [];
+  for (const {xyz, poses} of parts) {
+    const visible = poses.filter(Boolean);
+    if (!visible.length) continue;
+    const count = Math.min(512, xyz.length / 3);
+    const indices = Array.from({length: count}, (_, i) =>
+      3 * Math.round(i * (xyz.length / 3 - 1) / Math.max(1, count - 1)));
+    // Include all poses of our dense clips, while bounding the work for large imported scenes.
+    const posesToFit = Math.min(128, visible.length);
+    const values = new Float64Array(count);
+    const trim = Math.floor(count * .005);
+    for (let i = 0; i < posesToFit; i++) {
+      const p = visible[Math.round(i * (visible.length - 1) / Math.max(1, posesToFit - 1))];
+      const extent = newBounds();
+      for (let row = 0; row < 3; row++) {
+        const j = 4 * row;
+        for (let sample = 0; sample < count; sample++) {
+          const q = indices[sample];
+          values[sample] = p[j] * xyz[q] + p[j + 1] * xyz[q + 1] + p[j + 2] * xyz[q + 2] + p[j + 3];
+        }
+        values.sort();
+        // A few stray depth samples should not set the zoom. All original points still render.
+        extent.min[row] = values[trim];
+        extent.max[row] = values[count - 1 - trim];
+      }
+      bounds.push(extent);
+    }
+  }
+  return bounds;
 }
 
 /** All frames use the same center and scale. Motion is expressed in reference-camera coordinates. */
@@ -63,10 +80,15 @@ export class MotionViewer extends PointViewer {
         !Array.isArray(scene.parts) || !scene.parts.length) {
       throw new Error('部位またはフレームを読み取れません。');
     }
+    const parts = scene.parts.map(p => readPart(p, scene.frame_count));
+    const extents = motionBounds(parts);
+    if (!extents.length) throw new Error('表示できる姿勢がありません。');
     const bounds = newBounds();
-    const parts = scene.parts.map(p => readPart(p, scene.frame_count, bounds));
-    if (!bounds.min.every(Number.isFinite) || !bounds.max.every(Number.isFinite)) {
-      throw new Error('表示できる姿勢がありません。');
+    for (const extent of extents) {
+      for (let axis = 0; axis < 3; axis++) {
+        include(bounds, axis, extent.min[axis]);
+        include(bounds, axis, extent.max[axis]);
+      }
     }
     const elements = parts.reduce((sum, p) => sum + p.xyz.length, 0);
     this.positions = new Float32Array(elements);
@@ -75,8 +97,30 @@ export class MotionViewer extends PointViewer {
     this.frameCount = scene.frame_count;
     this.center = bounds.min.map((lo, i) => (lo + bounds.max[i]) / 2);
     this.radius = Math.hypot(...bounds.max.map((hi, i) => hi - this.center[i])) || 1;
+    this.extents = extents;
     this.resetView();
     return this.setFrame(0);
+  }
+
+  fitDistance(aspect) {
+    // Both renderers use a focal length of 1.2 times the smaller viewport dimension.
+    const xScale = 2.4 * Math.min(1, 1 / aspect) / .9;
+    const yScale = 2.4 * Math.min(1, aspect) / .9;
+    const [cx, cy, cz] = this.center;
+    let distance = .15;
+    for (const {min, max} of this.extents) {
+      const x = Math.max(cx - min[0], max[0] - cx);
+      const y = Math.max(cy - min[1], max[1] - cy);
+      // Camera coordinates increase away from the viewer; the nearest face needs the most room.
+      distance = Math.max(distance, (cz - min[2] + Math.max(xScale * x, yScale * y)) / this.radius + .02);
+    }
+    return distance;
+  }
+
+  resetView() {
+    this.fitAspect = null;
+    this.lastFit = null;
+    super.resetView();
   }
 
   setFrame(index) {
@@ -118,6 +162,16 @@ export class MotionViewer extends PointViewer {
   }
 
   redraw() {
+    if (this.extents) {
+      const aspect = Math.max(1, this.canvas.clientWidth) / Math.max(1, this.canvas.clientHeight);
+      if (aspect !== this.fitAspect) {
+        const fit = this.fitDistance(aspect);
+        // Keep the user's relative zoom and orbit when the pane changes size.
+        this.distance = this.lastFit ? this.distance * fit / this.lastFit : fit;
+        this.fitAspect = aspect;
+        this.lastFit = fit;
+      }
+    }
     if (!this.context2d) { super.redraw(); return; }
     if (this.frame) return;
     this.frame = requestAnimationFrame(() => {

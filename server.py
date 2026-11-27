@@ -101,11 +101,23 @@ def read_photos(photos, destination):
 
 def read_video(fields, destination):
     parts = dict(fields)
-    if len(parts) != len(fields) or set(parts) not in ({"parts", "video"}, {"parts", "video", "camera"}):
+    if (len(parts) != len(fields) or not {"parts", "video"} <= parts.keys() or
+            parts.keys() - {"parts", "video", "camera", "sampling", "horizontal_fov_deg"}):
         raise ValueError("動画と部品の選択範囲を送信してください。")
     camera = parts["camera"].get_payload(decode=True) if "camera" in parts else b"fixed"
     if camera not in (b"fixed", b"moving"):
         raise ValueError("カメラ設定は fixed または moving を選んでください。")
+    sampling = parts["sampling"].get_payload(decode=True) if "sampling" in parts else b"standard"
+    if sampling not in (b"standard", b"dense"):
+        raise ValueError("フレームの抽出設定は standard または dense を選んでください。")
+    fov = None
+    if "horizontal_fov_deg" in parts:
+        try:
+            fov = float(parts["horizontal_fov_deg"].get_payload(decode=True))
+        except (TypeError, ValueError):
+            raise ValueError("水平画角を度数で入力してください。") from None
+        if not 10 <= fov <= 160:
+            raise ValueError("水平画角は10〜160度の範囲で指定してください。")
     data = parts["parts"].get_payload(decode=True)
     if not data or len(data) > 8192:
         raise ValueError("部品情報のサイズが不正です。")
@@ -144,7 +156,7 @@ def read_video(fields, destination):
     path = destination / ("input" + extension)
     path.write_bytes(video)
     (destination / "parts.json").write_text(json.dumps(boxes, ensure_ascii=False), encoding="utf-8")
-    return path, camera.decode("ascii")
+    return path, camera.decode("ascii"), sampling.decode("ascii"), fov
 
 
 def vertex_count(path):
@@ -196,9 +208,12 @@ class JobStore:
                                "--output", str(output), "--device", "auto"]
                     progress = "MASt3Rで写真を復元しています。"
                 else:
-                    video_path, camera = video
+                    video_path, camera, sampling, fov = video
                     command = [sys.executable, str(ROOT / "reconstruct_video.py"), "--video", str(video_path),
-                               "--parts", str(inputs / "parts.json"), "--output", str(output), "--camera", camera]
+                               "--parts", str(inputs / "parts.json"), "--output", str(output), "--camera", camera,
+                               "--sampling", sampling]
+                    if fov is not None:
+                        command.extend(["--horizontal-fov-deg", str(fov)])
                     progress = "動画のフレームを復元し、部品ごとの動きを計算しています。"
                 with self.lock:
                     if self.closing:

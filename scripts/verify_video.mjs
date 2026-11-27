@@ -1,5 +1,7 @@
 // Run the generated public sample through the same HTTP API as the video picker.
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { readFile, writeFile, appendFile } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -144,6 +146,12 @@ for (const part of scene.parts) {
   assert.ok(rms < tolerance, `${part.name}: centroid motion RMSE ${rms.toFixed(1)} exceeds ${tolerance.toFixed(1)} px`);
 }
 await writeFile(destination, bytes);
+const evaluator = fileURLToPath(new URL('./video_quality.py', import.meta.url));
+const qualityArgs = [evaluator, path.join(example, 'truth.json'), destination, '--check-demo'];
+if (process.env.VIDEO_BASELINE_SCENE) qualityArgs.push('--baseline', process.env.VIDEO_BASELINE_SCENE);
+if (process.env.VIDEO_QUALITY_REPORT) qualityArgs.push('--output', process.env.VIDEO_QUALITY_REPORT);
+const quality = execFileSync('python', qualityArgs, {encoding: 'utf8'});
+report.push(...quality.trim().split('\n'));
 console.log(report.join('\n'));
 if (process.env.GITHUB_STEP_SUMMARY) {
   await appendFile(process.env.GITHUB_STEP_SUMMARY, '### Generated video validation\n\n'+report.map(x=>'- '+x).join('\n')+'\n');

@@ -8,9 +8,13 @@ on:
       - 'reconstruct_video.py'
       - 'video_parts.py'
       - 'video_camera.py'
+      - 'video_calibration.py'
       - 'video_depth.py'
+      - 'video_shape.py'
+      - 'video_bundle.py'
       - 'server.py'
       - 'scripts/verify_video.mjs'
+      - 'scripts/video_quality.py'
       - 'scripts/make_video_example.py'
   workflow_dispatch:
     inputs:
@@ -29,6 +33,15 @@ on:
         type: choice
         options: [fixed, moving]
         default: fixed
+      sampling:
+        description: Frame sampling for your clip
+        type: choice
+        options: [standard, dense]
+        default: standard
+      horizontal_fov_deg:
+        description: Optional calibrated horizontal field of view in degrees for the cropped video
+        type: string
+        required: false
       use_example:
         description: Use the generated two-part video instead
         type: boolean
@@ -94,10 +107,14 @@ jobs:
         shell: bash
         env:
           CAMERA: ${{ inputs.camera }}
+          SAMPLING: ${{ inputs.sampling }}
+          HFOV: ${{ inputs.horizontal_fov_deg }}
         run: |
           mkdir -p result
           inputs="$RUNNER_TEMP/video-input"
-          python reconstruct_video.py --video "$inputs"/video.* --parts "$inputs/parts.json" --camera "$CAMERA" --output result/scene.json
+          options=(--camera "$CAMERA" --sampling "${SAMPLING:-standard}")
+          if [[ -n "$HFOV" ]]; then options+=(--horizontal-fov-deg "$HFOV"); fi
+          python reconstruct_video.py --video "$inputs"/video.* --parts "$inputs/parts.json" "${options[@]}" --output result/scene.json
           test -s result/scene.json
 
       - uses: actions/setup-node@v4
@@ -124,12 +141,18 @@ jobs:
           server=$!
           trap 'kill "$server" 2>/dev/null || true' EXIT
           curl --retry 20 --retry-delay 1 --retry-connrefused --fail --silent http://127.0.0.1:7861/api/health
-          node scripts/verify_video.mjs "$example" result/scene.json
+          published=docs/video-example
+          if cmp -s "$example/video.mp4" "$published/video.mp4" && cmp -s "$example/parts.json" "$published/parts.json"; then
+            export VIDEO_BASELINE_SCENE="$published/scene.json"
+          fi
+          VIDEO_QUALITY_REPORT=result/quality.json node scripts/verify_video.mjs "$example" result/scene.json
 
       - uses: actions/upload-artifact@v4
         with:
           name: mast3r-video-scene
-          path: result/scene.json
+          path: |
+            result/scene.json
+            result/quality.json
           if-no-files-found: error
           retention-days: 7
 
@@ -139,7 +162,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/public-video"
-          cp result/scene.json "$RUNNER_TEMP/generated-video/video.mp4" "$RUNNER_TEMP/generated-video/parts.json" "$RUNNER_TEMP/public-video/"
+          cp result/scene.json result/quality.json "$RUNNER_TEMP/generated-video/video.mp4" "$RUNNER_TEMP/generated-video/parts.json" "$RUNNER_TEMP/public-video/"
 
       - uses: actions/upload-artifact@v4
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -171,7 +194,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p docs/video-example
-          for name in scene.json video.mp4 parts.json; do
+          for name in scene.json quality.json video.mp4 parts.json; do
             cp "$RUNNER_TEMP/public-video/$name" "docs/video-example/$name"
             git add -f -- "docs/video-example/$name"
           done
