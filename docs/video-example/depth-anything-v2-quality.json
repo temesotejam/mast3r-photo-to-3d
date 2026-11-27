@@ -1,0 +1,258 @@
+{
+  "current": {
+    "teal-link": {
+      "frames": 16,
+      "status_counts": {
+        "observed": 11,
+        "interpolated": 5,
+        "unavailable": 0
+      },
+      "rotation_rmse_deg": 1.6178434388501726,
+      "outline_iou": 0.7745722404349444,
+      "thickness_over_length": 0.5214845938302073,
+      "true_thickness_over_length": 0.1320754716981132,
+      "thickness_ratio_error": 0.3894091221320941,
+      "by_frame": {
+        "0": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.0,
+          "iou": 0.7193962604190133
+        },
+        "1": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 1.5511801087568884,
+          "iou": 0.7095014874245019
+        },
+        "2": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 3.067218184937278,
+          "iou": 0.718569198273487
+        },
+        "3": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 2.9131941429993753,
+          "iou": 0.7169641161951775
+        },
+        "4": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.43534746316145834,
+          "iou": 0.7398575253877634
+        },
+        "5": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 1.0660612210702711,
+          "iou": 0.7480840927920464
+        },
+        "6": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.21262813284231538,
+          "iou": 0.7684204840103717
+        },
+        "7": {
+          "status": "interpolated",
+          "fully_hidden": false,
+          "rotation_deg": 1.1330647278272348,
+          "iou": 0.7965344376634699
+        },
+        "8": {
+          "status": "interpolated",
+          "fully_hidden": true,
+          "rotation_deg": 1.8500897980443458,
+          "iou": 0.8063439978124145
+        },
+        "9": {
+          "status": "interpolated",
+          "fully_hidden": false,
+          "rotation_deg": 2.166803658068121,
+          "iou": 0.8221206782646994
+        },
+        "10": {
+          "status": "interpolated",
+          "fully_hidden": false,
+          "rotation_deg": 1.9366315961142722,
+          "iou": 0.8389740730415389
+        },
+        "11": {
+          "status": "interpolated",
+          "fully_hidden": false,
+          "rotation_deg": 1.0911470483373051,
+          "iou": 0.8425567703952902
+        },
+        "12": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 1.2393403308707256,
+          "iou": 0.8367095691102406
+        },
+        "13": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.8075501369745867,
+          "iou": 0.799490364707756
+        },
+        "14": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 1.6782114219309665,
+          "iou": 0.7644419517666854
+        },
+        "15": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.9270497681561457,
+          "iou": 0.7651908396946565
+        }
+      }
+    },
+    "amber-link": {
+      "frames": 16,
+      "status_counts": {
+        "observed": 16,
+        "interpolated": 0,
+        "unavailable": 0
+      },
+      "rotation_rmse_deg": 0.2744728364318277,
+      "outline_iou": 0.7662535455319279,
+      "thickness_over_length": 0.7216447236063948,
+      "true_thickness_over_length": 0.12698412698412698,
+      "thickness_ratio_error": 0.5946605966222678,
+      "by_frame": {
+        "0": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.0,
+          "iou": 0.7283375826774563
+        },
+        "1": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.9218184850573571,
+          "iou": 0.7485429126509466
+        },
+        "2": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.1744573789287141,
+          "iou": 0.7569909108489654
+        },
+        "3": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.3035609635180455,
+          "iou": 0.7733889401291254
+        },
+        "4": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.03489507169713851,
+          "iou": 0.7758606523703886
+        },
+        "5": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.11366549871064371,
+          "iou": 0.773764820049787
+        },
+        "6": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.10043965149666044,
+          "iou": 0.7899478844625033
+        },
+        "7": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.06681276085319922,
+          "iou": 0.8247371056584877
+        },
+        "8": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.04565821898109615,
+          "iou": 0.8248242127789667
+        },
+        "9": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.051691652171147386,
+          "iou": 0.8145794392523364
+        },
+        "10": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.26594602754055846,
+          "iou": 0.7792541956296325
+        },
+        "11": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.04770197774843664,
+          "iou": 0.7572507387545147
+        },
+        "12": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.08603368209739055,
+          "iou": 0.7640705976153372
+        },
+        "13": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.14356463414202125,
+          "iou": 0.7317816190313196
+        },
+        "14": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.0728861631063116,
+          "iou": 0.7161247511612475
+        },
+        "15": {
+          "status": "observed",
+          "fully_hidden": false,
+          "rotation_deg": 0.305380766010184,
+          "iou": 0.700600365439833
+        }
+      }
+    }
+  },
+  "visible_surfaces": {
+    "current": {
+      "teal-link": {
+        "precision": 0.4001172934535591,
+        "recall": 0.7304078700121587,
+        "f_score": 0.5170142682548192,
+        "reference_points": 18094,
+        "reconstruction_points": 13641,
+        "tolerance_over_length": 0.02,
+        "alignment_scale": 1.1417259256697614,
+        "alignment_translation_over_length": [
+          0.528492783425413,
+          -0.027059659776581157,
+          -0.08830417845218208
+        ]
+      },
+      "amber-link": {
+        "precision": 0.3611404435058078,
+        "recall": 0.8446443172526574,
+        "f_score": 0.5059530245603885,
+        "reference_points": 19568,
+        "reconstruction_points": 16099,
+        "tolerance_over_length": 0.02,
+        "alignment_scale": 0.9931355538209327,
+        "alignment_translation_over_length": [
+          0.5439627070928209,
+          0.009645083759758102,
+          -0.09517046101535794
+        ]
+      }
+    }
+  }
+}
