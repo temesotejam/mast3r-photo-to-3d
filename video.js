@@ -9,10 +9,6 @@ const methodNames = {
   mast3r: 'MASt3R', 'depth-anything-v2': 'Depth Anything V2', monst3r: 'MonST3R',
   'rgb-sfm': 'RGB SfM（特徴点）',
 };
-const sampleFiles = {
-  mast3r: 'scene.json', 'depth-anything-v2': 'depth-anything-v2.json',
-  monst3r: 'monst3r.json', 'rgb-sfm': 'rgb-sfm.json',
-};
 let activeScene = null;
 let times = [];
 let currentFrame = -1;
@@ -123,7 +119,7 @@ source.addEventListener('error', () => {
 });
 get('fit-view').addEventListener('click', () => viewer.resetView());
 
-async function loadScene(blob, clip, title, generation) {
+async function loadScene(blob, clip, title, generation, showCredit = false) {
   if (blob.size > 128 * 1024 * 1024) throw new Error('JSONは128 MiB以下にしてください。');
   const scene = JSON.parse(await blob.text());
   if (generation !== sceneGeneration) return;
@@ -131,6 +127,7 @@ async function loadScene(blob, clip, title, generation) {
   viewer.load(scene);
   stop();
   activeScene = scene;
+  get('scene-credit').hidden = !showCredit;
   times = stamps;
   currentFrame = -1;
   if (referenceUrl?.startsWith('blob:')) URL.revokeObjectURL(referenceUrl);
@@ -157,6 +154,7 @@ async function loadScene(blob, clip, title, generation) {
   if (method === 'reference-rgbd-pnp') details.push('参照RGB-D ＋ PnP');
   else if (Object.hasOwn(methodNames, method)) details.push(methodNames[method]);
   else if (typeof scene.model === 'string' && scene.model) details.push(scene.model);
+  if (method === 'rgb-sfm') details.push('部品ごとの相対スケール');
   if (averageRate) details.push('平均 ' + averageRate.toFixed(1) + ' コマ/秒');
   const focalLabels = {horizontal_fov: '指定値', rigid_plane_tracks: '部品の動きから推定', mast3r: 'MASt3R推定',
     monst3r: 'MonST3R推定', reference_calibration: '参照カメラの校正値', assumed_60deg: '仮定値'};
@@ -168,12 +166,15 @@ async function loadScene(blob, clip, title, generation) {
 
 async function sample() {
   const generation = ++sceneGeneration;
-  const method = get('sample-method').value;
+  const option = get('sample-method').selectedOptions[0];
+  const group = option.parentElement;
+  const folder = './video-example/';
   tell('scene-msg', 'サンプルを読み込んでいます…');
   try {
-    const response = await fetch('./video-example/' + sampleFiles[method]);
+    const response = await fetch(folder + option.dataset.scene);
     if (!response.ok) throw new Error();
-    await loadScene(await response.blob(), './video-example/video.mp4', 'サンプルの復元結果', generation);
+    await loadScene(await response.blob(), folder + group.dataset.video, group.label, generation,
+                    group.hasAttribute('data-credit'));
     if (generation === sceneGeneration && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       source.play().catch(() => {});
     }
@@ -465,10 +466,9 @@ if (!pages) {
     tell('job-msg','前回の復元ジョブの状態を確認できます。');
   }
 }
-for (const key of Object.keys(sampleFiles)) {
-  if (key !== 'mast3r') get('sample-method').add(new Option(methodNames[key], key));
-}
 const requestedSample = new URLSearchParams(location.search).get('sample');
-if (Object.hasOwn(sampleFiles, requestedSample)) get('sample-method').value = requestedSample;
+if ([...get('sample-method').options].some(option => option.value === requestedSample)) {
+  get('sample-method').value = requestedSample;
+}
 sync();
 sample();
