@@ -21,8 +21,17 @@
       <div class="panel-title">
         <h2 id="scene-title">動作ビュー</h2>
         <div class="toolbar">
-          <select class="subbutton" id="sample-method" aria-label="サンプルの復元方式">
-            <option value="mast3r">MASt3R</option>
+          <select class="subbutton" id="sample-method" aria-label="サンプルの映像と復元方式">
+            <optgroup label="合成 · 動く2本の部品" data-video="video.mp4">
+              <option value="mast3r" data-scene="scene.json">MASt3R</option>
+              <option value="depth-anything-v2" data-scene="depth-anything-v2.json">Depth Anything V2</option>
+              <option value="monst3r" data-scene="monst3r.json">MonST3R</option>
+              <option value="rgb-sfm" data-scene="rgb-sfm.json">RGB SfM（特徴点）</option>
+            </optgroup>
+            <optgroup label="実写 · TUD-Lの竜の模型" data-video="tudl/video.mp4" data-credit>
+              <option value="dragon-rgb-sfm" data-scene="tudl/rgb-sfm.json">実写の竜 · RGB SfM</option>
+              <option value="dragon-rgbd" data-scene="tudl/reference-rgbd.json">実写の竜 · 参照RGB-D ＋ PnP</option>
+            </optgroup>
           </select>
           <button class="subbutton" id="sample" type="button">サンプルを開く</button>
           <button class="subbutton" id="open-scene" type="button">JSONを開く</button>
@@ -50,6 +59,7 @@
       </div>
       <div class="scene-info">
         <div id="parts-status" aria-label="各部品の追跡状態"></div>
+        <a class="hint" id="scene-credit" href="./video-example/tudl/SOURCE.txt" hidden>実写映像・点群の出典と利用条件</a>
         <span class="hint" id="view-hint">ドラッグで回転 · スクロールでズーム</span>
       </div>
       <p class="scene-msg" id="scene-msg" role="status" aria-live="polite"></p>

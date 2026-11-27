@@ -1,0 +1,11 @@
+TUD-L (TUD Light), test/000001, dragon model, frames 0, 8, 16, …, 88
+Tomáš Hodaň, Frank Michel et al., “BOP: Benchmark for 6D Object Pose Estimation”, ECCV 2018.
+Dataset and source: https://bop.felk.cvut.cz/datasets/#TUD-L
+Download: https://huggingface.co/datasets/bop-benchmark/tudl
+License for the source data and these derived clips and point clouds: Creative Commons Attribution-ShareAlike 4.0 International
+https://creativecommons.org/licenses/by-sa/4.0/
+
+動画は上記の公開データから12コマを取り出し、毎秒4コマの400×300の動画に縮小・再エンコードしたものです。
+点群と時刻ごとの姿勢は今回のアプリで元の大きさの素材を読み込んで推定しました。
+rgb-sfm.json はRGBの特徴点を用いて推定しています。
+reference-rgbd.json は先頭コマに限り、実測奥行き・対象マスク・カメラ内部行列を加えています。
